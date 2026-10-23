@@ -55,6 +55,8 @@ jobs:
         run: ./packaging/build.ps1
       - name: Exercise frozen service without installing it
         run: python packaging/smoke.py --binary dist/MockAiZeApiService/MockAiZeApiService.exe
+      - name: Exercise all frozen Qt interfaces without changing the installation
+        run: python packaging/smoke_ui.py --binary dist/MockAiZeApiConfig.exe --binary dist/MockAiZeApiUninstall.exe --binary dist/MockAiZe-API-Setup.exe
       - name: Upload only Windows EXE
         uses: actions/upload-artifact@v4
         with:

@@ -6,11 +6,11 @@ Push-Location $RepositoryRoot
 try {
     & $Python packaging/create_icon.py
     if ($LASTEXITCODE -ne 0) { throw 'Falha ao preparar ícone do MockAíZé.' }
-    & $Python -m PyInstaller --noconfirm --clean packaging/service.spec
+    & $Python packaging/freeze.py packaging/service.spec
     if ($LASTEXITCODE -ne 0) { throw 'Falha ao empacotar serviço.' }
-    & $Python -m PyInstaller --noconfirm --clean packaging/config.spec
+    & $Python packaging/freeze.py packaging/config.spec
     if ($LASTEXITCODE -ne 0) { throw 'Falha ao empacotar configurador.' }
-    & $Python -m PyInstaller --noconfirm --clean packaging/uninstall.spec
+    & $Python packaging/freeze.py packaging/uninstall.spec
     if ($LASTEXITCODE -ne 0) { throw 'Falha ao empacotar desinstalador.' }
     $PayloadPath = Join-Path $RepositoryRoot 'build\payload'
     if (Test-Path -LiteralPath $PayloadPath) {
@@ -24,7 +24,7 @@ try {
     Copy-Item -LiteralPath 'dist\MockAiZeApiUninstall.exe' -Destination $PayloadPath
     & $Python packaging/collect_licenses.py (Join-Path $PayloadPath 'licenses')
     if ($LASTEXITCODE -ne 0) { throw 'Falha ao coletar licenças dos componentes.' }
-    & $Python -m PyInstaller --noconfirm --clean packaging/setup.spec
+    & $Python packaging/freeze.py packaging/setup.spec
     if ($LASTEXITCODE -ne 0) { throw 'Falha ao empacotar setup.' }
     & $Python packaging/verify_binaries.py
     if ($LASTEXITCODE -ne 0) { throw 'Executáveis inválidos ou incompletos; nada foi preparado para distribuição.' }
