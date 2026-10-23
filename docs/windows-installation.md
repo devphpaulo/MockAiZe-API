@@ -73,6 +73,30 @@ dados são preservadas. Caso escolha manter os binários, o comprovante local
 `installation.json` permite reconhecer a instalação para limpeza posterior, mesmo
 após a remoção do serviço e de seu cadastro no Windows.
 
+## Falha ao carregar QtCore
+
+O erro `DLL load failed while importing QtCore: Não foi possível encontrar o
+procedimento especificado` foi diagnosticado nos binários locais antigos. O build
+capturou `icuuc.dll` de uma ferramenta auxiliar Poppler presente no PATH do
+ambiente de desenvolvimento. O Qt 6.12 espera as funções ICU do Windows, como
+`ucnv_close`; a DLL capturada fornece nomes diferentes, como `ucnv_close_78`.
+
+A correção do commit `325830b` isola os caminhos de busca durante a compilação e
+rejeita bibliotecas nativas coletadas fora do projeto, do Python/ambiente virtual
+e do Windows. O diagnóstico compilado passou no mesmo computador com o ambiente
+normal e com os caminhos de desenvolvimento removidos; a ICU externa deixou de
+ser incluída. Os EXEs antigos precisam ser substituídos pelo novo build.
+
+O Actions também executa os três EXEs gráficos com `--diagnose-ui <relatorio.json>`
+antes do upload. Esse modo carrega QtCore/Gui/Widgets, o plugin nativo Windows e
+o ícone, renderiza uma janela de teste e termina com resultado JSON. Não entra no
+assistente e não registra, para ou remove serviços. A elevação do manifesto dos
+EXEs permanece necessária; no CI essa verificação roda no runner com elevação.
+Falha no carregamento ou na renderização impede a publicação do artefato.
+
+Essa correção funcional não resolve nem classifica a detecção do Kaspersky.
+Consulte a [análise do antivírus](antivirus-analysis.md) para essa investigação.
+
 ## Construir a distribuição
 
 Em um Windows com Python e dependências de desenvolvimento instaladas:
@@ -91,8 +115,9 @@ tamanhos de 16 a 256 pixels. O PNG/ICO é mantido neste próprio repositório; o
 build não depende de acessar o diretório do estúdio.
 O Actions repete o build em pushes, pull requests ou acionamento manual. Antes de
 publicar os dois EXEs, valida os quatro binários internos (Windows x64, ícones e
-elevação), runtime e licenças, e executa saúde, catálogo e geração XML no serviço
-compilado. Os hashes ficam no resumo da execução; o artefato é mantido por 30 dias.
+elevação), origem das bibliotecas, runtime e licenças, e executa saúde, catálogo e
+geração XML no serviço compilado. Também testa o carregamento do Qt e a renderização
+nos três EXEs gráficos. Os hashes ficam no resumo da execução; o artefato é mantido por 30 dias.
 Nenhum arquivo de planejamento nem checkout do estúdio entra no pacote.
 `python -m mockaize_api.setup_ui --preview` permite verificar a interface sem
 instalar serviço ou alterar firewall. Testes unitários não realizam operações

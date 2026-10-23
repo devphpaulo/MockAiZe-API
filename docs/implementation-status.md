@@ -10,7 +10,7 @@ Atualizado em 23/10/2026. Repositório público; planejamento interno fora do Gi
 | COD-11–13 / AD-01 | Publicação, HTTP, autenticação, estado/logs | HTTP real, hashes, entrada isolada, replay/conflito, falha parcial e logs sanitizados |
 | COD-14/15/17–20 | SCM, assistente Qt, atualização/reparo/configuração/remoção | Testes Windows com driver simulado e renderização Qt; sem instalar no computador do usuário |
 | COD-16 | Build Windows, setup e desinstalador | Quatro EXEs verificados no Actions; dois EXEs publicados como artefato |
-| CT-01/02 / TES-01 | Cenários executáveis em tests | 124 testes aprovados no CI Windows com Python 3.11/3.14 |
+| CT-01/02 / TES-01 | Cenários executáveis em tests | 136 testes aprovados no CI Windows com Python 3.11/3.14; diagnósticos Qt dos três EXEs aprovados |
 | TES-02 | Instalação elevada, boot, ACLs e rede | Pendente em VM; teste simulado não substitui essa evidência |
 | DOC-01 | Guia de uso e evidências | Disponível; release estável ainda não aprovada |
 
@@ -24,18 +24,28 @@ Desinstalação atualizada: parada/exclusão do serviço confirmadas antes de pe
 
 ## Evidências
 
-Python 3.14 no Windows local: **124 testes executados, 123 aprovados e um ignorado** (a conta local não permite criar symlink). A rejeição de reparse points também tem um caso determinístico aprovado. A suíte usa avisos de recursos como erro, HTTP real, subprocessos de geração e janelas Qt com serviço/limpeza simulados. No [Actions 39901224467](https://github.com/devphpaulo/MockAiZe-API/actions/runs/39901224467), os 124 testes passaram em Python 3.11 e 3.14, incluindo Qt/pywin32 e verificação do pacote instalado fora do checkout.
+Python 3.14 no Windows local: **136 testes executados, 135 aprovados e um ignorado** (a conta local não permite criar symlink). A rejeição de reparse points também tem um caso determinístico aprovado. A suíte usa avisos de recursos como erro, HTTP real, subprocessos de geração e janelas Qt com serviço/limpeza simulados. No [Actions 39904195078](https://github.com/devphpaulo/MockAiZe-API/actions/runs/39904195078), os 136 testes passaram em Python 3.11 e 3.14, incluindo Qt/pywin32 e verificação do pacote instalado fora do checkout.
 
 O teste do novo desinstalador encontrou uma falha no encaminhamento dos sinais entre threads; a interface agora recebe conclusão/erro através de slots QObject na thread principal. Casos aprovados cobrem tanto confirmação de remoção antes das perguntas e fechamento com OK quanto falha do serviço sem oferecer limpeza.
 
-Smoke do serviço recém-compilado sem registrar SCM/firewall passou localmente e no Actions: saúde, catálogo, Novo com 500 registros inline/hash, dois arquivos apart e dois registros mixed. Novo levou cerca de 0,50 s localmente e 0,78 s no runner em fixture simples, sem representar carga real.
+Smoke do serviço compilado sem registrar SCM/firewall passou no Actions: saúde, catálogo, Novo com 500 registros inline/hash, dois arquivos apart e dois registros mixed. Novo levou cerca de 0,58 s no runner em fixture simples, sem representar carga real.
 
-O build verificou arquitetura x64, os frames do ícone original em cada PE, elevação dos três executáveis gráficos e a inclusão do runtime, dos executáveis, do ícone da janela e das licenças. O payload foi conferido para excluir planejamento, configuração, credenciais e SQLite. O [artefato de desenvolvimento](https://github.com/devphpaulo/MockAiZe-API/actions/runs/39901224467/artifacts/12478518212) contém setup (158.639.912 bytes) e desinstalador (48.966.938 bytes). SHA-256:
+O build verificou arquitetura x64, os frames do ícone original em cada PE, elevação dos três executáveis gráficos, origem das bibliotecas e inclusão do runtime, dos executáveis, do ícone da janela e das licenças. O payload foi conferido para excluir planejamento, configuração, credenciais e SQLite. O [novo artefato de desenvolvimento](https://github.com/devphpaulo/MockAiZe-API/actions/runs/39904195078/artifacts/12480192765) contém setup (138.593.152 bytes) e desinstalador (42.603.520 bytes). SHA-256:
 
 | Arquivo | SHA-256 |
 |---|---|
-| MockAiZe-API-Setup.exe | `9c40c0edb8360ce15f56cab3f69abe4b513c702944b1126484e295bc766fde4e` |
-| MockAiZeApiUninstall.exe | `4a8d6743ca5c8c98aa766ae8e977dad6df530fbdf9cec49abb484c52556d2d90` |
+| MockAiZe-API-Setup.exe | `b77093cd67f4cb9c4fdf6589539727e1885f989d74fe6e6b1d72c1969f9602cd` |
+| MockAiZeApiUninstall.exe | `13ce99c8fbd94e65f87c944a4ae8c0d38baaa7471d56bebf58b3eb85eb9a3e4d` |
+
+O commit `325830b` corrigiu o erro de importação QtCore do pacote local: uma ICU
+de Poppler presente no PATH era coletada, mas não exporta as funções esperadas pelo
+Qt 6.12. O build agora limita os caminhos nativos e recusa fontes externas aos
+diretórios autorizados. Um diagnóstico sem elevação compilado com o mesmo entrypoint
+passou localmente com ambiente normal e isolado. O Actions executou os próprios
+EXEs de configuração, desinstalação e setup em modo diagnóstico: Qt, plugin Windows,
+ícone e renderização aprovados, sem entrar nos fluxos que alteram a instalação.
+O novo setup local foi compilado, mas a validação recebeu acesso negado novamente;
+nada foi preparado em release local. A questão do antivírus permanece separada.
 
 Quatro etapas da janela Qt foram renderizadas e conferidas. Revisões independentes corrigiram: idempotência ativa expirando, cache permanente de 429, cliente lento bloqueando parada, vazamento de fórmulas em erros, namespaces no misto, status de limites e rollback de configuração/origens/registro Windows. Nove diretórios temporários de testes interrompidos foram conferidos e removidos.
 

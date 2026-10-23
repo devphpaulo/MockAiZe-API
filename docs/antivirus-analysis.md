@@ -3,6 +3,13 @@
 Análise de 23/10/2026. Resultado: **detecção pendente de revisão pelo fabricante**.
 Esta inspeção não confirma malware nem permite classificar a detecção como falso positivo.
 
+Atualização funcional: a falha de importação QtCore nos EXEs locais antigos foi
+atribuída à coleta da ICU de uma ferramenta auxiliar no PATH. O commit `325830b`
+isola a compilação, verifica a origem das DLLs e acrescenta diagnóstico gráfico
+dos EXEs ao CI. Isso corrige uma incompatibilidade de empacotamento, sem provar
+relação causal com a detecção do antivírus. Os hashes e tamanhos abaixo continuam
+identificando a amostra original reportada, não os executáveis recompilados.
+
 ## Amostra e procedência
 
 O evento fornecido pelo usuário identifica `HEUR:Trojan.Win32.Generic`, componente
