@@ -26,6 +26,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Falha ao coletar licenças dos componentes.' }
     & $Python -m PyInstaller --noconfirm --clean packaging/setup.spec
     if ($LASTEXITCODE -ne 0) { throw 'Falha ao empacotar setup.' }
+    & $Python packaging/verify_binaries.py
+    if ($LASTEXITCODE -ne 0) { throw 'Executáveis inválidos ou incompletos; nada foi preparado para distribuição.' }
     $SetupPath = Join-Path $RepositoryRoot 'dist\MockAiZe-API-Setup.exe'
     try {
         $SetupHash = (Get-FileHash -LiteralPath $SetupPath -Algorithm SHA256 -ErrorAction Stop).Hash
