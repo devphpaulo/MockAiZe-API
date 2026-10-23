@@ -1,0 +1,62 @@
+name: Inspect reported Windows artifact
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Existing build run to inspect without executing its binaries
+        required: true
+        default: '39901224467'
+      expected_md5:
+        description: MD5 reported by Kaspersky for the setup
+        required: true
+        default: B429D0B256D29613CCC1D976722E05DF
+      expected_sha256:
+        description: SHA-256 recorded by the original build
+        required: true
+        default: 9c40c0edb8360ce15f56cab3f69abe4b513c702944b1126484e295bc766fde4e
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  inspect:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - name: Download original artifact on the disposable runner
+        uses: actions/download-artifact@v4
+        with:
+          name: MockAiZe-API-Setup-Windows-x64
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+          path: inspected
+      - name: Install static inspection tools
+        run: python -m pip install pyinstaller==6.22.3 pefile==2024.8.26
+      - name: Compare identity and inspect embedded archives without executing EXEs
+        env:
+          EXPECTED_MD5: ${{ inputs.expected_md5 }}
+          EXPECTED_SHA256: ${{ inputs.expected_sha256 }}
+        shell: pwsh
+        run: |
+          python packaging/inspect_artifact.py --directory inspected --report inspection/binary-report.json --expected-md5 "$env:EXPECTED_MD5" --expected-sha256 "$env:EXPECTED_SHA256"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $signatures = Get-ChildItem inspected/*.exe | ForEach-Object {
+            $signature = Get-AuthenticodeSignature -LiteralPath $_.FullName
+            [pscustomobject]@{ fileName = $_.Name; status = $signature.Status.ToString(); publisher = $signature.SignerCertificate.Subject }
+          }
+          $signatures | ConvertTo-Json | Set-Content inspection/signatures.json -Encoding utf8
+          Get-Content inspection/binary-report.json >> $env:GITHUB_STEP_SUMMARY
+          Get-Content inspection/signatures.json >> $env:GITHUB_STEP_SUMMARY
+      - name: Upload diagnostic JSON only
+        uses: actions/upload-artifact@v4
+        with:
+          name: Windows-artifact-inspection
+          path: inspection/*.json
+          if-no-files-found: error
+          retention-days: 30
