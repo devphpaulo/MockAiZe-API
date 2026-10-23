@@ -1,7 +1,7 @@
 # Instalação no Windows
 
 Baixe `MockAiZe-API-Setup.exe` na release da API. O pacote inclui o runtime Python,
-serviço e configurador; não depende da instalação do aplicativo visual. Execute o
+serviço, configurador e desinstalador; não depende da instalação do aplicativo visual. Execute o
 setup e autorize a solicitação do Windows. A janela desktop preta e verde usa Qt
 Widgets locais, sem navegador ou servidor do assistente.
 
@@ -43,10 +43,32 @@ diagnóstico antes de nova tentativa. Para reparar binários a partir do configu
 abra o setup da release desejada. O próprio configurador instalado não substitui o
 executável em que está rodando.
 
-Desinstale pelo Windows ou pelo configurador. A remoção preserva todos os dados por
-padrão; sua exclusão posterior é manual e explícita. Binários bloqueados pelo
-configurador em execução são agendados para remoção no próximo reinício. Não
-remova pastas de dados sem fazer backup dos arquivos necessários.
+## Desinstalação
+
+Abra `MockAiZeApiUninstall.exe`, instalado em Program Files, ou use Desinstalar
+no Windows/configurador. O configurador abre esse executável separado e se fecha.
+O desinstalador usa o ícone do MockAíZé e solicita a elevação padrão do Windows.
+
+1. Para o serviço e confirma sua parada.
+2. Remove o serviço, a regra própria do firewall e o cadastro do aplicativo.
+3. Espera o Windows confirmar que o serviço deixou de existir. Se continuar
+   marcado para exclusão por algum console aberto, informa o problema e não
+   inicia a limpeza nem mostra sucesso.
+4. Pergunta se deseja apagar os binários da pasta específica do produto em
+   Program Files. **Não** é o padrão.
+5. Pergunta quais pastas da API deseja limpar, mostrando os caminhos e avisando
+   que seu conteúdo será apagado. Pastas aninhadas aparecem como uma única
+   opção da pasta principal; pastas externas configuradas aparecem separadamente.
+6. Executa somente a limpeza escolhida, mostra **OK** e finaliza. Quando o
+   próprio executável estiver em uso, informa que a remoção será concluída no
+   próximo reinício; não afirma que os arquivos bloqueados já foram apagados.
+
+O SQLite de origem do estúdio e qualquer pasta que o contenha não são oferecidos
+para exclusão. Raízes do disco, pastas de sistema, perfil do usuário e destinos
+com links/junções são recusados. Se a configuração estiver ilegível, as pastas de
+dados são preservadas. Caso escolha manter os binários, o comprovante local
+`installation.json` permite reconhecer a instalação para limpeza posterior, mesmo
+após a remoção do serviço e de seu cadastro no Windows.
 
 ## Construir a distribuição
 
@@ -57,9 +79,13 @@ python -m pip install -e '.[packaging,windows]'
 ./packaging/build.ps1
 ```
 
-O único arquivo de entrega é `release\MockAiZe-API-Setup.exe`. O SHA-256 aparece
-no resultado do build, sem acrescentar outro arquivo à entrega. As três especificações
-PyInstaller produzem serviço sem janela, configurador e setup com payload completo.
+Os arquivos de entrega são `release\MockAiZe-API-Setup.exe` e
+`release\MockAiZeApiUninstall.exe`. O primeiro também instala uma cópia do segundo
+em Program Files. O SHA-256 aparece no resultado do build. As quatro especificações
+PyInstaller produzem serviço sem janela, configurador, desinstalador e setup completo.
+Todos os executáveis usam o ícone fornecido do MockAíZé, convertido em ICO com
+tamanhos de 16 a 256 pixels. O PNG/ICO é mantido neste próprio repositório; o
+build não depende de acessar o diretório do estúdio.
 Nenhum arquivo de planejamento nem checkout do estúdio entra no pacote.
 `python -m mockaize_api.setup_ui --preview` permite verificar a interface sem
 instalar serviço ou alterar firewall. Testes unitários não realizam operações

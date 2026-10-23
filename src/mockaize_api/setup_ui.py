@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 
 from .config import ApiConfig, ConfigurationError, load_config
-from .windows_ops import (CONFIG_EXE, SERVICE_EXE, Installation, Installer, WindowsDriver,
+from .windows_ops import (CONFIG_EXE, SERVICE_EXE, UNINSTALL_EXE, Installation, Installer, WindowsDriver,
                           discover_installation, validate_origins, wait_health)
 
 
@@ -55,6 +55,7 @@ def detect_mode(installation, driver) -> str:
     if (installation.config_path.is_file()
             and (installation.directory / SERVICE_EXE).is_file()
             and (installation.directory / CONFIG_EXE).is_file()
+            and (installation.directory / UNINSTALL_EXE).is_file()
             and driver.status() != 'absent'):
         return 'update'
     return 'repair'
@@ -66,13 +67,14 @@ def payload_directory() -> Path:
 
 def main() -> None:
     from PySide6.QtCore import QObject, QThread, Signal, QUrl, Qt
-    from PySide6.QtGui import QDesktopServices
+    from PySide6.QtGui import QDesktopServices, QIcon
     from PySide6.QtWidgets import (QApplication, QFrame, QHBoxLayout, QLabel, QLineEdit,
         QMainWindow, QMessageBox, QPlainTextEdit, QProgressBar, QPushButton, QRadioButton,
         QSpinBox, QVBoxLayout, QWidget, QFileDialog, QScrollArea)
 
     app = QApplication.instance() or QApplication(sys.argv)
     app.setApplicationName('MockAíZé API')
+    app.setWindowIcon(QIcon(str(Path(__file__).parent / 'assets' / 'mockaize-favicon.png')))
     app.setStyleSheet(STYLE)
 
     class Worker(QObject):
@@ -432,13 +434,11 @@ def main() -> None:
         def ask_uninstall(self):
             if not self.existing or self.preview:
                 return
-            answer = QMessageBox.question(self, 'Desinstalar MockAíZé API',
-                'Remover serviço, binários e a regra de firewall do produto?\nConfiguração, chave, XMLs, estado e logs serão preservados.',
-                QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-            if answer == QMessageBox.Yes:
-                def remove(emit):
-                    Installer(self.installation, self.driver, emit).uninstall()
-                self.run_action(remove, 'uninstall')
+            try:
+                self.driver.launch_uninstaller(self.installation)
+                self.close()
+            except Exception as error:
+                QMessageBox.warning(self, 'Não foi possível abrir o desinstalador', str(error))
 
         def closeEvent(self, event):
             if self.busy:

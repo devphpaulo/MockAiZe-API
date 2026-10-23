@@ -9,5 +9,5 @@ a = Analysis([str(root / 'packaging' / 'service_entry.py')], pathex=[str(root / 
              excludes=['PySide6', 'tkinter'])
 pyz = PYZ(a.pure)
 exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name='MockAiZeApiService',
-          console=False, contents_directory='_internal')
+          icon=str(root / 'src/mockaize_api/assets/mockaize.ico'), console=False, contents_directory='_internal')
 coll = COLLECT(exe, a.binaries, a.datas, name='MockAiZeApiService')

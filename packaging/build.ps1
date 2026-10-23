@@ -4,10 +4,14 @@ Set-StrictMode -Version Latest
 $RepositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Push-Location $RepositoryRoot
 try {
+    & $Python packaging/create_icon.py
+    if ($LASTEXITCODE -ne 0) { throw 'Falha ao preparar ícone do MockAíZé.' }
     & $Python -m PyInstaller --noconfirm --clean packaging/service.spec
     if ($LASTEXITCODE -ne 0) { throw 'Falha ao empacotar serviço.' }
     & $Python -m PyInstaller --noconfirm --clean packaging/config.spec
     if ($LASTEXITCODE -ne 0) { throw 'Falha ao empacotar configurador.' }
+    & $Python -m PyInstaller --noconfirm --clean packaging/uninstall.spec
+    if ($LASTEXITCODE -ne 0) { throw 'Falha ao empacotar desinstalador.' }
     $PayloadPath = Join-Path $RepositoryRoot 'build\payload'
     if (Test-Path -LiteralPath $PayloadPath) {
         $ResolvedPayload = (Resolve-Path -LiteralPath $PayloadPath).Path
@@ -17,6 +21,7 @@ try {
     New-Item -Path $PayloadPath -ItemType Directory -Force | Out-Null
     Copy-Item -Path 'dist\MockAiZeApiService\*' -Destination $PayloadPath -Recurse
     Copy-Item -LiteralPath 'dist\MockAiZeApiConfig.exe' -Destination $PayloadPath
+    Copy-Item -LiteralPath 'dist\MockAiZeApiUninstall.exe' -Destination $PayloadPath
     & $Python packaging/collect_licenses.py (Join-Path $PayloadPath 'licenses')
     if ($LASTEXITCODE -ne 0) { throw 'Falha ao coletar licenças dos componentes.' }
     & $Python -m PyInstaller --noconfirm --clean packaging/setup.spec
@@ -30,10 +35,12 @@ try {
     $ReleasePath = Join-Path $RepositoryRoot 'release'
     New-Item -Path $ReleasePath -ItemType Directory -Force | Out-Null
     Copy-Item -LiteralPath $SetupPath -Destination (Join-Path $ReleasePath 'MockAiZe-API-Setup.exe') -Force
+    Copy-Item -LiteralPath (Join-Path $RepositoryRoot 'dist\MockAiZeApiUninstall.exe') -Destination $ReleasePath -Force
     Write-Output "Instalador Windows: release\MockAiZe-API-Setup.exe"
+    Write-Output "Desinstalador Windows: release\MockAiZeApiUninstall.exe"
     Write-Output "SHA-256: $SetupHash"
     # PKG is PyInstaller's temporary archive, never a distribution deliverable.
-    foreach ($PkgRelative in @('build\service\MockAiZeApiService.pkg', 'build\config\MockAiZeApiConfig.pkg', 'build\setup\MockAiZe-API-Setup.pkg')) {
+    foreach ($PkgRelative in @('build\service\MockAiZeApiService.pkg', 'build\config\MockAiZeApiConfig.pkg', 'build\uninstall\MockAiZeApiUninstall.pkg', 'build\setup\MockAiZe-API-Setup.pkg')) {
         $PkgPath = [IO.Path]::GetFullPath((Join-Path $RepositoryRoot $PkgRelative))
         if (-not $PkgPath.StartsWith($RepositoryRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw 'Intermediário fora do workspace.' }
         if (Test-Path -LiteralPath $PkgPath) { Remove-Item -LiteralPath $PkgPath -Force }

@@ -4,7 +4,7 @@ import unittest
 from unittest.mock import patch
 
 from mockaize_api.config import ApiConfig, save_config
-from mockaize_api.windows_ops import (CONFIG_EXE, SERVICE_EXE, Installation, Installer,
+from mockaize_api.windows_ops import (CONFIG_EXE, SERVICE_EXE, UNINSTALL_EXE, Installation, Installer,
                                      validate_origins, wait_health)
 
 
@@ -30,6 +30,10 @@ class FakeDriver:
 
     def remove_registration(self):
         self.events.append('remove')
+        self.state = 'absent'
+
+    def wait_removed(self):
+        self.events.append('verify-absent')
 
     def remove_binaries(self, directory):
         self.events.append(('remove binaries', directory))
@@ -42,7 +46,7 @@ class InstallerTests(unittest.TestCase):
         self.root = Path(temporary.name)
         self.payload = self.root / 'payload'
         self.payload.mkdir()
-        for executable in (SERVICE_EXE, CONFIG_EXE):
+        for executable in (SERVICE_EXE, CONFIG_EXE, UNINSTALL_EXE):
             (self.payload / executable).write_text('new binary')
         self.target = self.root / 'installed'
         self.target.mkdir()
@@ -87,6 +91,10 @@ class InstallerTests(unittest.TestCase):
             self.assertIsNone(self.installer.install(self.payload))
         self.assertEqual(health.call_args.args[0].port, 8123)
         self.assertEqual((self.target / SERVICE_EXE).read_text(), 'new binary')
+        self.assertEqual((self.target / UNINSTALL_EXE).read_text(), 'new binary')
+        import json
+        receipt = json.loads((self.target / 'installation.json').read_text(encoding='utf-8'))
+        self.assertEqual(receipt['configPath'], str(self.path))
         self.assertFalse(self.target.with_name('installed.rollback').exists())
         self.assert_preserved()
 
@@ -154,6 +162,9 @@ class InstallerTests(unittest.TestCase):
         self.installer.uninstall()
         self.assert_preserved()
         self.assertIn('remove', self.driver.events)
+        self.assertIn('verify-absent', self.driver.events)
+        self.assertFalse(any(isinstance(event, tuple) and event[0] == 'remove binaries'
+                             for event in self.driver.events))
 
     def test_config_failure_restores_previous_configuration(self):
         replacement = ApiConfig(self.config.database_path, self.config.input_directory,

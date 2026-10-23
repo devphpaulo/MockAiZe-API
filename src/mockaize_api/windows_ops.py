@@ -15,6 +15,7 @@ from .windows_service import REGISTRY_KEY, SERVICE_NAME
 FIREWALL_RULE = 'MockAiZe API HTTP'
 SERVICE_EXE = 'MockAiZeApiService.exe'
 CONFIG_EXE = 'MockAiZeApiConfig.exe'
+UNINSTALL_EXE = 'MockAiZeApiUninstall.exe'
 
 
 @dataclass(frozen=True)
@@ -81,7 +82,7 @@ class Installer:
                 invalid_config = config_path.read_bytes()
         if config is None:
             raise ValueError('A instalação nova exige configuração.')
-        for executable in (SERVICE_EXE, CONFIG_EXE):
+        for executable in (SERVICE_EXE, CONFIG_EXE, UNINSTALL_EXE):
             if not (payload / executable).is_file():
                 raise RuntimeError('O pacote do instalador está incompleto. Baixe uma versão íntegra.')
         self.progress('Validando banco, diretórios e porta…')
@@ -112,6 +113,12 @@ class Installer:
                     backup.rename(target)
                 raise
             swapped = True
+            receipt = {'product': 'MockAiZe API', 'version': 1, 'directory': str(target),
+                       'configPath': str(config_path), 'origins': self.installation.origins}
+            receipt_path = target / 'installation.json'
+            receipt_temporary = target / '.installation.json.tmp'
+            receipt_temporary.write_text(json.dumps(receipt, ensure_ascii=False), encoding='utf-8')
+            os.replace(receipt_temporary, receipt_path)
             if not previous or invalid_config is not None:
                 config_path.parent.mkdir(parents=True, exist_ok=True)
                 if invalid_config is not None:
@@ -185,8 +192,8 @@ class Installer:
         self.driver.stop()
         self.require_stopped()
         self.driver.remove_registration()
-        self.driver.remove_binaries(self.installation.directory)
-        self.progress('Serviço e binários removidos. Configuração, chave, XMLs, estado e logs preservados.')
+        self.driver.wait_removed()
+        self.progress('Serviço removido da listagem. A limpeza de arquivos depende da escolha do usuário.')
 
 
 class WindowsDriver:
@@ -222,6 +229,19 @@ class WindowsDriver:
         if self.status() != 'running':
             win32serviceutil.StartService(SERVICE_NAME)
         win32serviceutil.WaitForServiceStatus(SERVICE_NAME, win32service.SERVICE_RUNNING, 30)
+
+    def wait_removed(self, timeout=30):
+        deadline = time.monotonic() + timeout
+        while self.status() != 'absent':
+            if time.monotonic() >= deadline:
+                raise RuntimeError('O Windows ainda lista o serviço para exclusão. Feche consoles de serviços abertos e tente novamente; nenhum arquivo foi limpo.')
+            time.sleep(0.2)
+
+    def launch_uninstaller(self, installation):
+        executable = installation.directory / UNINSTALL_EXE
+        if not executable.is_file():
+            raise RuntimeError('O desinstalador não foi encontrado. Repare a instalação usando o setup atualizado.')
+        subprocess.Popen([str(executable)], creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
 
     def configure(self, installation: Installation, config: ApiConfig):
         import winreg
@@ -288,7 +308,8 @@ class WindowsDriver:
             for name, value in [('DisplayName', 'MockAíZé API'),
                                 ('DisplayVersion', '0.1.0'),
                                 ('InstallLocation', str(installation.directory)),
-                                ('UninstallString', f'"{exe}" --uninstall')]:
+                                ('DisplayIcon', f'"{exe}",0'),
+                                ('UninstallString', f'"{installation.directory / UNINSTALL_EXE}"')]:
                 winreg.SetValueEx(key, name, 0, winreg.REG_SZ, value)
             winreg.SetValueEx(key, 'NoModify', 0, winreg.REG_DWORD, 1)
         shortcut = Path(os.environ['ProgramData']) / 'Microsoft/Windows/Start Menu/Programs/MockAíZé API — Configurar.lnk'
@@ -296,6 +317,7 @@ class WindowsDriver:
         link = shell.CreateShortcut(str(shortcut))
         link.TargetPath = str(exe)
         link.WorkingDirectory = str(installation.directory)
+        link.IconLocation = f'{exe},0'
         link.Save()
 
     def remove_registration(self):
@@ -315,15 +337,19 @@ class WindowsDriver:
         # Running configurator cannot delete itself; Windows removes locked files at reboot.
         import win32api
         import win32con
+        delayed = False
         for path in sorted(directory.rglob('*'), key=lambda p: len(p.parts), reverse=True):
             try:
                 path.rmdir() if path.is_dir() else path.unlink()
             except PermissionError:
                 win32api.MoveFileEx(str(path), None, win32con.MOVEFILE_DELAY_UNTIL_REBOOT)
+                delayed = True
         try:
             directory.rmdir()
         except OSError:
             win32api.MoveFileEx(str(directory), None, win32con.MOVEFILE_DELAY_UNTIL_REBOOT)
+            delayed = True
+        return delayed
 
 
 def discover_installation() -> Installation | None:

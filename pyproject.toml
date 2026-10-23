@@ -19,6 +19,7 @@ mockaize-api = "mockaize_api.cli:main"
 
 [project.gui-scripts]
 mockaize-api-setup = "mockaize_api.setup_ui:main"
+mockaize-api-uninstall = "mockaize_api.uninstall_ui:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/mockaize_api"]

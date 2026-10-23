@@ -3,7 +3,7 @@ import tempfile
 import unittest
 
 from mockaize_api.setup_ui import detect_mode
-from mockaize_api.windows_ops import Installation, CONFIG_EXE, SERVICE_EXE
+from mockaize_api.windows_ops import Installation, CONFIG_EXE, SERVICE_EXE, UNINSTALL_EXE
 
 
 class Driver:
@@ -21,7 +21,7 @@ class SetupDetectionTests(unittest.TestCase):
     def test_existing_service_and_complete_files_detect_update(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            for filename in ('config.json', SERVICE_EXE, CONFIG_EXE):
+            for filename in ('config.json', SERVICE_EXE, CONFIG_EXE, UNINSTALL_EXE):
                 (root / filename).touch()
             installation = Installation(root, root / 'config.json')
             self.assertEqual(detect_mode(installation, Driver('running')), 'update')

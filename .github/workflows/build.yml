@@ -25,7 +25,7 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - name: Install development package and builder
-        run: python -m pip install -e . build
+        run: python -m pip install -e '.[windows]' build
       - name: Run tests
         run: python -W error::ResourceWarning -m unittest discover -s tests -v
       - name: Build distributions
@@ -62,4 +62,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: MockAiZe-API-Setup-Windows-x64
-          path: release/MockAiZe-API-Setup.exe
+          path: |
+            release/MockAiZe-API-Setup.exe
+            release/MockAiZeApiUninstall.exe

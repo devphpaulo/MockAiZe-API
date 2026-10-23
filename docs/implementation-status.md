@@ -18,11 +18,15 @@ Atualizado em 23/10/2026. Repositório público; planejamento interno fora do Gi
 
 Windows x64; assistente Qt Widgets nativo com tema preto/verde e serviço sem UI separado. Conta LocalService, credencial de alta entropia com hash fora do JSON, estado próprio v1, rede HTTP com origens configuráveis (LocalSubnet padrão), replay 24h e logs 30 dias. Padrões operacionais estão documentados e podem ser ajustados; não são apresentados como decisões anteriores do usuário.
 
-Só `MockAiZe-API-Setup.exe` será entregue. `.pkg` é intermediário interno; pipeline de instalador manual enquanto a detecção estiver em análise. Planejamento interno não entra no pacote ou repositório.
+Entrega em EXE: `MockAiZe-API-Setup.exe` e o desinstalador solicitado `MockAiZeApiUninstall.exe`, ambos com ícone do MockAíZé. `.pkg` é intermediário interno; pipeline de instalador manual enquanto a detecção estiver em análise. Planejamento interno não entra no pacote ou repositório.
+
+Desinstalação atualizada: parada/exclusão do serviço confirmadas antes de perguntar sobre binários e pastas; nenhuma limpeza automática por padrão. Destinos são conferidos antes de excluir, com proteção do SQLite do estúdio e rejeição de links/junções. O fluxo termina com OK e avisa quando arquivos em uso exigirem reinício. O novo executável ainda precisa do build final e da homologação privilegiada em VM.
 
 ## Evidências
 
-Python 3.14 no Windows: **107 testes aprovados**, com avisos de recursos tratados como erro, HTTP real e subprocessos de geração. O CI anterior passou em 3.11/3.14; a suíte ampliada precisa executar novamente no CI.
+Python 3.14 no Windows: **120 testes executados, 119 aprovados e um ignorado** (a conta local não permite criar symlink). A rejeição de reparse points também tem um caso determinístico aprovado. A suíte usa avisos de recursos como erro, HTTP real, subprocessos de geração e janelas Qt com serviço/limpeza simulados. O CI Windows inclui dependências Qt/pywin32 em 3.11 e 3.14.
+
+O teste do novo desinstalador encontrou uma falha no encaminhamento dos sinais entre threads; a interface agora recebe conclusão/erro através de slots QObject na thread principal. Casos aprovados cobrem tanto confirmação de remoção antes das perguntas e fechamento com OK quanto falha do serviço sem oferecer limpeza.
 
 Smoke do serviço empacotado sem registrar SCM/firewall passou: saúde, catálogo, Novo com 500 registros inline/hash, dois arquivos apart e dois registros mixed. Novo levou cerca de 0,49 s em fixture simples, sem representar carga real. O binário inicial antecede correções finais e exige rebuild antes de distribuição.
 
