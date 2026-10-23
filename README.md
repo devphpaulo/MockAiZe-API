@@ -1,62 +1,49 @@
-# MockAíZé API
+# MockAíZé API para Windows
 
-API standalone em Python para consultar a biblioteca do MockAíZé e gerar XML com as configurações salvas pelo estúdio.
+Serviço independente para consultar configurações salvas do MockAíZé e gerar XML. O estúdio pode ficar fechado. A API lê seu SQLite somente para consulta e mantém contadores e idempotência em uma base própria.
 
-**Estado atual: em implementação, versão `0.1.0.dev0`.** Acompanhe os recursos disponíveis e as validações em `docs/implementation-status.md`.
+**Entrega: somente `MockAiZe-API-Setup.exe`, Windows x64.** O assistente desktop instala serviço e configurador em Program Files. Não é necessário instalar Python ou operar um terminal. `.pkg` é intermediário interno de build e nunca é entregue.
 
-## Desenvolvimento
+**Estado: implementação em validação, `0.1.0.dev0`.** Catálogo, motor XML, HTTP, estado, logs e ciclo de vida Windows têm testes automatizados. O executável do serviço passou no smoke local. O setup final está bloqueado pela detecção `HEUR:Trojan.Win32.Generic` do Kaspersky durante o empacotamento. Não há instalador aprovado para download; a detecção requer análise. Boot, ACLs e firewall precisam de homologação em VM antes da release estável.
 
-Python 3.11 ou superior. O runtime desta primeira etapa usa somente a biblioteca padrão. Os comandos abaixo são para desenvolvedores; o produto final será instalado pelo assistente desktop.
+## Recursos
+
+- Saúde em `/health`; catálogo de arquivos, modos e modelos de retorno autenticado.
+- Novo: um XML com 1 a 500 registros solicitados.
+- Retorno: entrada salva, enviada ou arquivo autorizado; comparação estrutural antes da geração.
+- `apart` gera arquivos separados; `mixed` intercala modelos compatíveis em um XML.
+- Saída inline ou em diretório, sem sobrescrita; SHA-256 e tamanho exato.
+- `X-API-Key`, Problem Details, limites operacionais, idempotência e logs sanitizados.
+- Assistente Qt desktop; serviço automático separado; atualização com parada verificada, rollback e desinstalação preservando dados.
+
+Documentação: [API](docs/api.md), [Windows](docs/windows-installation.md), [SQLite](docs/sqlite-format.md), [motor XML](docs/engine-compatibility.md), [evidências e pendências](docs/implementation-status.md).
+
+## Desenvolvimento Windows
+
+Python 3.11 ou superior. O CI testa Windows com Python 3.11 e 3.14. Dependências: tzdata para fusos, PySide6 Essentials para a janela e pywin32 para integração Windows.
 
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\python -m pip install -e .
-.\.venv\Scripts\python -m unittest discover -s tests -v
-.\.venv\Scripts\mockaize-api --version
+.\.venv\Scripts\python -m pip install -e '.[windows,packaging]'
+.\.venv\Scripts\python -W error::ResourceWarning -m unittest discover -s tests -v
 ```
 
-Também é possível executar os testes sem instalar o pacote:
-
-```powershell
-$env:PYTHONPATH = 'src'
-python -m unittest discover -s tests -v
-```
-
-## Configuração e diagnóstico preliminar
-
-Copie `packaging/config.example.json` para um `config.json` local e ajuste os caminhos absolutos para arquivos e pastas existentes. O exemplo usa acesso local e porta 6578. O futuro setup gravará a configuração em `Documentos\MockAíZé API`; por enquanto o caminho deve ser informado explicitamente, sem inferir o perfil da conta do serviço.
+Copie `packaging/config.example.json` para um `config.json` local e ajuste os caminhos absolutos para banco e pastas existentes. Para desenvolvimento em primeiro plano:
 
 ```powershell
 .\.venv\Scripts\mockaize-api --config 'C:\caminho\config.json' --check
+.\.venv\Scripts\mockaize-api --config 'C:\caminho\config.json' --create-key
+.\.venv\Scripts\mockaize-api --config 'C:\caminho\config.json' --serve
 ```
 
-O comando verifica campos, tipos, caminhos absolutos, SQLite legível em modo read-only, acesso às pastas de entrada/saída/log e disponibilidade momentânea da porta. Faz uma pequena escrita temporária, removida ao fechar, nas pastas de saída e logs para verificar a permissão efetiva. Não cria pastas nem banco ausentes. Retorna zero com `preflight-passed` ou um com diagnóstico JSON seguro em stderr. Argumentos inválidos retornam dois.
+Guarde a chave mostrada uma única vez; somente seu hash é persistido em `credentials.json`, fora do JSON comum e dos logs. `--rotate-key` invalida a chave anterior. `--check` verifica JSON, SQLite genérico, pastas e porta; o startup também verifica schema, credencial e estado. Nada abre navegador ou inicia o estúdio. `python -m mockaize_api.setup_ui --preview` mostra a janela sem instalar serviço.
 
-Campos desconhecidos, duplicados, ausentes e chaves de API no JSON são rejeitados. Porta aceita somente inteiro de 1 a 65535. `host`/`firewallAccess` aceitam somente `127.0.0.1`/`N` ou `0.0.0.0`/`Y`. Saída e logs devem ter diretórios distintos. Leitura limitada a 64 KiB, UTF-8 com BOM opcional. A função de persistência prepara arquivo temporário no mesmo diretório e usa troca atômica; o futuro configurador deve chamar essa função apenas com o serviço parado.
-
-Esse diagnóstico não valida ainda o schema do estúdio, não reserva a porta, não configura firewall e não comprova ACLs de outra conta Windows. A configuração será lida novamente no início do futuro serviço. Segredos, caminhos e valores recebidos não são ecoados nos erros.
-
-## Independência e compatibilidade
-
-O pacote não importa módulos, executa JavaScript ou usa scripts de build do aplicativo visual. A integração de runtime será exclusivamente por SQLite configurado, sem migração ou escrita no banco de origem.
-
-| Fonte | Compatibilidade nesta etapa |
-|---|---|
-| SQLite sintético, inclusive WAL | Abertura preliminar somente leitura testada |
-| Formato MockAíZé `staging` / `a3156fc` | Referência documental; leitor e fixtures versionadas pendentes no COD-02 |
-| Outras versões do formato do estúdio | Sem suporte declarado |
-
-## Build e integração contínua
+## Build e entrega
 
 ```powershell
-.\.venv\Scripts\python -m pip install build
-.\.venv\Scripts\python -m build
+.\packaging\build.ps1 -Python .\.venv\Scripts\python.exe
 ```
 
-O build produz wheel e distribuição de fontes em `dist/`, usando [o fluxo de empacotamento da PyPA](https://packaging.python.org/en/latest/tutorials/packaging-projects/). Esses são artefatos preliminares Python, não instaladores Windows. O workflow próprio testa em Windows com Python 3.11 e 3.14, constrói as distribuições e verifica a instalação do wheel em ambiente limpo. Não precisa de checkout do estúdio e não publica em PyPI nem cria release automaticamente.
+O arquivo final é `release\MockAiZe-API-Setup.exe`; o hash aparece no resultado do build. `build/` e `dist/` contêm intermediários. Arquivos `.pkg` conhecidos são removidos após sucesso, mas isso não evita uma detecção durante sua criação. Não desative o antivírus nem distribua resultado incompleto. O workflow de instalador exige acionamento manual explícito; pushes executam testes e verificações do pacote, sem distribuir wheel ou `.pkg`.
 
-Versões preliminares usam sufixo de desenvolvimento. A versão estável v1 depende da implementação, QA e validação Windows dos cards restantes; build/release do instalador ficará no COD-16.
-
-## Próximas etapas
-
-O progresso e as pendências estão em [docs/implementation-status.md](docs/implementation-status.md). Os documentos internos de planejamento são mantidos somente na cópia local.
+O build e o runtime não dependem de checkout, módulos, JavaScript ou scripts do estúdio. A única integração operacional é o SQLite v2; formatos desconhecidos são rejeitados, nunca migrados. Planejamento interno permanece apenas na cópia local e fora do GitHub/pacote.

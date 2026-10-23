@@ -1,9 +1,14 @@
-name: Test and build API package
+name: Test Windows API
 
 on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      build_installer:
+        description: 'Gerar instalador Windows EXE após revisar o bloqueio do antivírus'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -35,7 +40,26 @@ jobs:
           Set-Location $env:RUNNER_TEMP
           & "$env:RUNNER_TEMP/wheel-check/Scripts/mockaize-api.exe" --version
           exit $LASTEXITCODE
-      - uses: actions/upload-artifact@v4
+  windows-installer:
+    if: github.event_name == 'workflow_dispatch' && inputs.build_installer
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          name: mockaize-api-python-${{ matrix.python }}
-          path: dist/*
+          python-version: '3.14'
+      - name: Install Windows build dependencies
+        run: python -m pip install -e '.[windows,packaging]'
+      - name: Test Windows lifecycle without privileged mutations
+        run: python -W error::ResourceWarning -m unittest discover -s tests -v
+      - name: Build self-contained service and desktop setup
+        shell: pwsh
+        run: ./packaging/build.ps1
+      - name: Exercise frozen service without installing it
+        run: python packaging/smoke.py --binary dist/MockAiZeApiService/MockAiZeApiService.exe
+      - name: Upload only Windows EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: MockAiZe-API-Setup-Windows-x64
+          path: release/MockAiZe-API-Setup.exe

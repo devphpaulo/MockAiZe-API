@@ -1,35 +1,35 @@
-# Implementação — primeira entrega
+# Estado da implementação Windows
 
-Data: 22/10/2026. Base: história v1, os dois protótipos e os quatro documentos em `initial-api-docs/docs/refino/`. O pedido de começar a implementação autoriza esta primeira entrega; as propostas ainda abertas permanecem pendentes.
+Atualizado em 23/10/2026. Repositório público; planejamento interno fora do Git e preservado localmente. Nenhum arquivo do estúdio foi alterado.
 
-## Recorte e critérios
+| Cards | Entrega | Evidência / limite |
+|---|---|---|
+| COD-00/01 | Pacote/configuração/entrada/preflight | Testes de JSON, arquivos, permissões e porta; startup valida dependências |
+| COD-02/03 | SQLite v2, snapshot/WAL, catálogo | Fixtures versionadas, exclusão de ancestrais, revisão concorrente e fonte somente leitura |
+| COD-04–10 | Motor Python, 20 fórmulas, estrutura, Novo/Retorno | Testes de namespaces, atributos, segundo registro, 500 registros, ciclos/políticas/datas e composição |
+| COD-11–13 / AD-01 | Publicação, HTTP, autenticação, estado/logs | HTTP real, hashes, entrada isolada, replay/conflito, falha parcial e logs sanitizados |
+| COD-14/15/17–20 | SCM, assistente Qt, atualização/reparo/configuração/remoção | Testes Windows com driver simulado e renderização Qt; sem instalar no computador do usuário |
+| COD-16 | Build Windows e setup único | Serviço/configurador construídos; setup bloqueado pelo Kaspersky |
+| CT-01/02 / TES-01 | Cenários executáveis em tests | Suíte local integrada; CI ampliado pendente |
+| TES-02 | Instalação elevada, boot, ACLs e rede | Pendente em VM; teste simulado não substitui essa evidência |
+| DOC-01 | Guia de uso e evidências | Disponível; release estável ainda não aprovada |
 
-Owner: agente principal, execução sequencial.
+## Decisões implementadas
 
-| Card | Entrega | Aceite desta etapa | Estado |
-|---|---|---|---|
-| COD-00 | Pacote `src`, entrypoints, dependências, README, testes, build e CI próprios | Testes passam e wheel instala fora do checkout | Implementado; pipeline remoto ainda depende de publicação |
-| COD-01 | Parser fechado e verificação preliminar | Config inválida falha; banco ausente não é criado; porta ocupada falha; salvamento preserva original em erro | Parcial: infraestrutura de configuração pronta; integração ao startup do serviço pendente |
-| COD-02 | Leitor de formato SQLite do estúdio | Snapshot/WAL, versão, exclusão lógica e fixtures versionadas | Próximo |
+Windows x64; assistente Qt Widgets nativo com tema preto/verde e serviço sem UI separado. Conta LocalService, credencial de alta entropia com hash fora do JSON, estado próprio v1, rede HTTP com origens configuráveis (LocalSubnet padrão), replay 24h e logs 30 dias. Padrões operacionais estão documentados e podem ser ajustados; não são apresentados como decisões anteriores do usuário.
 
-Nenhuma operação instala serviço, altera firewall ou muda o aplicativo visual. GitHub remoto criado privado como `devphpaulo/MockAiZe-API`. Repositório local e publicação inicial são tratados separadamente da criação remota.
+Só `MockAiZe-API-Setup.exe` será entregue. `.pkg` é intermediário interno; pipeline de instalador manual enquanto a detecção estiver em análise. Planejamento interno não entra no pacote ou repositório.
 
-## Decisões locais reversíveis
+## Evidências
 
-- Python >=3.11; testes com `unittest`; runtime inicial sem dependências externas.
-- Build com Hatchling, distribuições Python preliminares e CI Windows. Não equivale ao build do instalador COD-16.
-- Caminho da configuração explícito no CLI de desenvolvimento; pasta Documentos da conta de instalação será resolvida pelo futuro configurador.
-- Preflight verifica acesso SQLite genérico. Não declara compatibilidade de schema nem estado HTTP saudável.
-- Configuração comum não contém token. Geração, proteção, verificação por hash e rotação de credenciais pertencem à fronteira HTTP/configurador.
+Python 3.14 no Windows: **107 testes aprovados**, com avisos de recursos tratados como erro, HTTP real e subprocessos de geração. O CI anterior passou em 3.11/3.14; a suíte ampliada precisa executar novamente no CI.
 
-## Pendências preservadas do refino
+Smoke do serviço empacotado sem registrar SCM/firewall passou: saúde, catálogo, Novo com 500 registros inline/hash, dois arquivos apart e dois registros mixed. Novo levou cerca de 0,49 s em fixture simples, sem representar carga real. O binário inicial antecede correções finais e exige rebuild antes de distribuição.
 
-Conta Windows e ACLs, origens autorizadas no firewall, escolha WPF versus Qt, retenção de logs/idempotência, contadores próprios, modelos reais para `mixed` e limites medidos. Nenhuma dessas decisões foi presumida implementada. AD-01 não foi iniciado.
+Quatro etapas da janela Qt foram renderizadas e conferidas. Revisões independentes corrigiram: idempotência ativa expirando, cache permanente de 429, cliente lento bloqueando parada, vazamento de fórmulas em erros, namespaces no misto, status de limites e rollback de configuração/origens/registro Windows. Nove diretórios temporários de testes interrompidos foram conferidos e removidos.
 
-## Validação
+## Bloqueio e liberação
 
-Testes cobrem JSON inválido/duplicado/grande, campos extras e segredo, tipos estritos, caminhos Unicode, coerência rede/host, troca atômica e falha de substituição; preflight com SQLite intacto, WAL ativo, banco/pasta ausentes, arquivo inválido, falta de permissão de escrita e porta ocupada; CLI com códigos de saída e diagnóstico seguro.
+Kaspersky informou HEUR:Trojan.Win32.Generic e excluiu MockAiZe-API-Setup.pkg durante o build. O setup final não ficou disponível; não há artefato aprovado. Não foi confirmado malware nem falso positivo. Nenhuma proteção foi desativada, exclusão criada ou amostra enviada a terceiros.
 
-Execução local: Python 3.14 no Windows, 18 testes com avisos de recursos tratados como erro. Build isolado de sdist e wheel concluído. O CI inclui Python 3.11; essa versão não está instalada localmente. As primeiras execuções restritas encontraram bloqueio de acesso ao diretório temporário do sandbox; a validação local foi executada fora dessa restrição. Durante a implementação, os testes detectaram conexões SQLite não fechadas nas próprias fixtures, corrigidas com fechamento explícito.
-
-Revisão desta etapa: sem achados bloqueantes no recorte; aprovação com risco restrita à base de desenvolvimento. Não constitui aprovação do serviço Windows, schema do estúdio, HTTP ou instalador. Verificação de build remoto e Python 3.11 permanece para o CI após o envio.
+Para liberar: concluir análise da detecção; reconstruir código final e conferir licenças/hash/smoke; homologar em VM boot sem login, ACLs LocalService, rede autorizada, falsa confirmação de pausa, rollback/reparo/remoção; validar modelos reais e equivalência funcional do motor. Assinatura depende de certificado de distribuição. Estado atual: implementação em validação, não release estável concluída.

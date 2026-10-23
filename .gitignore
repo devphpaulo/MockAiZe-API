@@ -12,3 +12,7 @@ config.json
 *.sqlite3-shm
 *.log
 initial-api-docs/
+credentials.json
+policy.json
+release/
+*.pkg
