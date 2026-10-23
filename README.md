@@ -4,7 +4,7 @@ Serviço independente para consultar configurações salvas do MockAíZé e gera
 
 **Entrega Windows x64: `MockAiZe-API-Setup.exe` e `MockAiZeApiUninstall.exe`.** O assistente instala serviço, configurador e desinstalador em Program Files. Os executáveis usam o ícone do MockAíZé. Não é necessário instalar Python ou operar um terminal. `.pkg` é intermediário interno de build e nunca é entregue.
 
-**Estado: implementação em validação, `0.1.0.dev0`.** Catálogo, motor XML, HTTP, estado, logs e ciclo de vida Windows têm testes automatizados. O executável do serviço passou no smoke local. O setup final está bloqueado pela detecção `HEUR:Trojan.Win32.Generic` do Kaspersky durante o empacotamento. Não há instalador aprovado para download; a detecção requer análise. Boot, ACLs e firewall precisam de homologação em VM antes da release estável.
+**Estado: implementação em validação, `0.1.0.dev0`.** O [build Windows do Actions](https://github.com/devphpaulo/MockAiZe-API/actions/runs/39901224467) passou e disponibilizou [setup e desinstalador](https://github.com/devphpaulo/MockAiZe-API/actions/runs/39901224467/artifacts/12478518212). Catálogo, motor XML, HTTP, estado, logs e ciclo de vida Windows têm testes automatizados; o serviço compilado passou no smoke local e no Actions. O setup local deixou de existir após a compilação, consistente com o bloqueio anterior do Kaspersky; a detecção ainda requer análise. O sucesso do CI não resolve essa detecção. Boot, ACLs e firewall precisam de homologação em VM antes da release estável.
 
 ## Recursos
 
@@ -44,6 +44,8 @@ Guarde a chave mostrada uma única vez; somente seu hash é persistido em `crede
 .\packaging\build.ps1 -Python .\.venv\Scripts\python.exe
 ```
 
-Os executáveis finais ficam em `release/`; o hash do setup aparece no resultado do build. `build/` e `dist/` contêm intermediários. Arquivos `.pkg` conhecidos são removidos após sucesso, mas isso não evita uma detecção durante sua criação. Não desative o antivírus nem distribua resultado incompleto. O workflow de instalador exige acionamento manual explícito; pushes executam testes e verificações do pacote, sem distribuir wheel ou `.pkg`.
+Os executáveis finais ficam em `release/`; os hashes SHA-256 aparecem no resultado do build e no resumo do Actions. O build verifica arquitetura Windows x64, ícones, elevação, runtime, licenças e conteúdo do instalador antes de preparar a entrega. `build/` e `dist/` contêm intermediários. Arquivos `.pkg` conhecidos são removidos após sucesso, mas isso não evita uma detecção durante sua criação. Não desative o antivírus nem distribua resultado incompleto.
+
+O [workflow Windows](https://github.com/devphpaulo/MockAiZe-API/actions/workflows/build.yml) executa automaticamente em pushes e pull requests, e também aceita acionamento manual. Primeiro testa Python 3.11/3.14 e a instalação do pacote fora do checkout; depois compila os quatro executáveis, confere seu conteúdo e exercita o serviço compilado com HTTP/XML reais. Somente após sucesso disponibiliza o artefato **MockAiZe-API-Setup-Windows-x64** por 30 dias. O download é um ZIP do Actions contendo apenas o setup e o desinstalador `.exe`; extraia antes de executar. Wheels e `.pkg` não são publicados.
 
 O build e o runtime não dependem de checkout, módulos, JavaScript ou scripts do estúdio. A única integração operacional é o SQLite v2; formatos desconhecidos são rejeitados, nunca migrados. Planejamento interno permanece apenas na cópia local e fora do GitHub/pacote.

@@ -1,6 +1,9 @@
 # Instalação no Windows
 
-Baixe `MockAiZe-API-Setup.exe` na release da API. O pacote inclui o runtime Python,
+Na [página do workflow Windows](https://github.com/devphpaulo/MockAiZe-API/actions/workflows/build.yml),
+abra uma execução concluída com sucesso e baixe o artefato **MockAiZe-API-Setup-Windows-x64**.
+Extraia o ZIP do Actions: ele contém `MockAiZe-API-Setup.exe` e `MockAiZeApiUninstall.exe`.
+O pacote inclui o runtime Python,
 serviço, configurador e desinstalador; não depende da instalação do aplicativo visual. Execute o
 setup e autorize a solicitação do Windows. A janela desktop preta e verde usa Qt
 Widgets locais, sem navegador ou servidor do assistente.
@@ -86,6 +89,10 @@ PyInstaller produzem serviço sem janela, configurador, desinstalador e setup co
 Todos os executáveis usam o ícone fornecido do MockAíZé, convertido em ICO com
 tamanhos de 16 a 256 pixels. O PNG/ICO é mantido neste próprio repositório; o
 build não depende de acessar o diretório do estúdio.
+O Actions repete o build em pushes, pull requests ou acionamento manual. Antes de
+publicar os dois EXEs, valida os quatro binários internos (Windows x64, ícones e
+elevação), runtime e licenças, e executa saúde, catálogo e geração XML no serviço
+compilado. Os hashes ficam no resumo da execução; o artefato é mantido por 30 dias.
 Nenhum arquivo de planejamento nem checkout do estúdio entra no pacote.
 `python -m mockaize_api.setup_ui --preview` permite verificar a interface sem
 instalar serviço ou alterar firewall. Testes unitários não realizam operações
