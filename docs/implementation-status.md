@@ -41,6 +41,8 @@ Quatro etapas da janela Qt foram renderizadas e conferidas. Revisões independen
 
 ## Bloqueio e liberação
 
+A detecção também foi reportada para o EXE baixado do Actions. A [inspeção 39902707680](https://github.com/devphpaulo/MockAiZe-API/actions/runs/39902707680) confirmou o MD5 informado e o SHA-256 do build, os hashes dos executáveis internos e a ausência de assinatura Authenticode. Não há conclusão de falso positivo ou malware. A [análise detalhada](antivirus-analysis.md) explica a duplicação dos runtimes, a recomendação de instalador nativo com runtime compartilhado e as validações ainda necessárias. Essa migração ainda não foi implementada. A inspeção não executou os EXEs e o novo workflow publica somente relatórios JSON.
+
 Kaspersky informou anteriormente HEUR:Trojan.Win32.Generic e excluiu MockAiZe-API-Setup.pkg durante o build. Na nova tentativa local solicitada, PyInstaller concluiu o setup, a validação recebeu acesso negado e depois o EXE deixou de existir. O build no runner do GitHub concluiu e publicou os dois EXEs. Isso não confirma malware nem falso positivo e não encerra a análise da detecção local. Nenhuma proteção foi desativada, exclusão criada ou amostra enviada a terceiros.
 
 Para liberar uma versão estável: concluir análise da detecção; homologar em VM boot sem login, ACLs LocalService, rede autorizada, falsa confirmação de pausa, rollback/reparo/remoção; validar modelos reais e equivalência funcional do motor. Licenças/hash/smoke do build atual foram conferidos no CI. Assinatura depende de certificado de distribuição. Estado atual: implementação em validação, não release estável concluída.
