@@ -1,0 +1,9 @@
+{
+  "databasePath": "C:\\Users\\Usuario\\Documents\\MockAíZé\\mockaize.sqlite3",
+  "inputDirectory": "C:\\Users\\Usuario\\Documents\\MockAíZé API\\Entradas",
+  "outputDirectory": "C:\\Users\\Usuario\\Documents\\MockAíZé API\\Saídas",
+  "logsDirectory": "C:\\Users\\Usuario\\Documents\\MockAíZé API\\Logs",
+  "port": 6578,
+  "host": "127.0.0.1",
+  "firewallAccess": "N"
+}
