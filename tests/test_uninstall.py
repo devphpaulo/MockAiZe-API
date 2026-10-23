@@ -86,7 +86,7 @@ class UninstallTests(unittest.TestCase):
         self.session.detach()
         result = finish_uninstall(self.session, lambda kind, path: kind == 'binaries')
         self.assertTrue(result['restartRequired'])
-        self.assertIn(('remove-binaries', self.program), self.driver.events)
+        self.assertIn(('remove-binaries', self.program.resolve()), self.driver.events)
         self.assertTrue(self.path.is_file())
 
     def test_user_can_remove_folders_preserving_bins_and_source_database(self):
@@ -108,7 +108,7 @@ class UninstallTests(unittest.TestCase):
         config.database_path.write_bytes(b'preserve')
         save_config(self.path, config)
         session = UninstallSession(self.session.installation, self.driver)
-        self.assertNotIn(self.data, session.folders)
+        self.assertNotIn(self.data.resolve(), session.folders)
         session.detach()
         with self.assertRaises(ValueError):
             session.cleanup(False, [self.data])
