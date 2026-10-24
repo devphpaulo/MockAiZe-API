@@ -26,7 +26,7 @@ Importe a pasta [`bruno/`](bruno/) como collection e selecione o ambiente `local
 
 ## Download e build
 
-[Baixar o setup corrigido](https://github.com/devphpaulo/MockAiZe-API/actions/runs/40059677643/artifacts/12547241307): setup de 10.709.295 bytes e desinstalador de 2.156.324 bytes. [Actions aprovado](https://github.com/devphpaulo/MockAiZe-API/actions/runs/40059677643), commit `f0bff9c`.
+[Baixar o setup corrigido](https://github.com/devphpaulo/MockAiZe-API/actions/runs/40061171729/artifacts/12547711118): setup de 10.712.013 bytes e desinstalador de 2.156.324 bytes. [Actions aprovado](https://github.com/devphpaulo/MockAiZe-API/actions/runs/40061171729), commit `b1b3ae3`.
 
 No [workflow Windows](https://github.com/devphpaulo/MockAiZe-API/actions/workflows/build.yml), abra uma execução nativa concluída com sucesso e baixe o artefato **MockAiZe-API-Setup-Windows-x64**. Extraia o ZIP do Actions para obter os dois EXEs. Os artefatos ficam disponíveis por 30 dias.
 
