@@ -16,6 +16,27 @@ FIREWALL_RULE = 'MockAiZe API HTTP'
 SERVICE_EXE = 'MockAiZeApiService.exe'
 CONFIG_EXE = 'MockAiZeApiConfig.exe'
 UNINSTALL_EXE = 'MockAiZeApiUninstall.exe'
+SERVICE_ACCOUNT = r'NT AUTHORITY\NetworkService'
+SERVICE_SID = '*S-1-5-20'  # NetworkService; presents the computer account on SMB.
+
+
+def _is_network_path(path: Path) -> bool:
+    """Return whether Windows resolves this path through a remote drive/share."""
+    value = str(path)
+    if value.startswith('\\\\'):
+        return True
+    if os.name != 'nt' or not path.drive:
+        return False
+    import ctypes
+    return ctypes.windll.kernel32.GetDriveTypeW(path.drive + '\\') == 4
+
+
+def _is_mapped_network_drive(path: Path) -> bool:
+    """Mapped letters belong to the interactive logon and are invisible to SCM services."""
+    if os.name != 'nt' or not path.drive or str(path).startswith('\\\\'):
+        return False
+    import ctypes
+    return ctypes.windll.kernel32.GetDriveTypeW(path.drive + '\\') == 4
 
 
 @dataclass(frozen=True)
@@ -253,34 +274,41 @@ class WindowsDriver:
                 winreg.SetValueEx(key, name, 0, winreg.REG_SZ, value)
         action = 'create' if self.status() == 'absent' else 'config'
         self.run('sc.exe', action, SERVICE_NAME, 'binPath=', f'"{executable}"',
-                 'start=', 'auto', 'obj=', r'NT AUTHORITY\LocalService',
+                 'start=', 'auto', 'obj=', SERVICE_ACCOUNT,
                  'DisplayName=', 'MockAíZé API')
         self.run('sc.exe', 'failure', SERVICE_NAME, 'reset=', '86400',
                  'actions=', 'restart/5000/restart/15000/restart/60000')
         self.run('sc.exe', 'failureflag', SERVICE_NAME, '1')
-        # SID S-1-5-19 is LocalService, independent of the Windows display language.
         # Data has no inherited Users ACL; token and state live beside config.json.
+        # NetworkService provides machine credentials for remote SMB shares.
         root = installation.config_path.parent
-        self.run('icacls.exe', str(root), '/inheritance:r', '/grant:r',
-                 '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', '*S-1-5-19:(OI)(CI)M')
-        self.run('icacls.exe', str(installation.directory), '/grant', '*S-1-5-19:(OI)(CI)RX')
-        # Only the configured input and database tree receive read permissions.
+        if not _is_network_path(root):
+            self.run('icacls.exe', str(root), '/inheritance:r', '/grant:r',
+                     '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', f'{SERVICE_SID}:(OI)(CI)M')
+        if not _is_network_path(installation.directory):
+            self.run('icacls.exe', str(installation.directory), '/grant', f'{SERVICE_SID}:(OI)(CI)RX')
+        # Only local configured trees receive local SID grants. Remote SMB
+        # permissions are controlled by the share and the machine account.
         for directory in (config.input_directory, config.database_path.parent):
-            self.run('icacls.exe', str(directory), '/grant', '*S-1-5-19:(OI)(CI)RX')
+            if not _is_network_path(directory):
+                self.run('icacls.exe', str(directory), '/grant', f'{SERVICE_SID}:(OI)(CI)RX')
         # The default input lives below the writable data root. Remove inherited
         # write permission from that subtree while retaining admin recovery access.
-        if config.input_directory.is_relative_to(root):
+        if not _is_network_path(config.input_directory) and config.input_directory.is_relative_to(root):
             self.run('icacls.exe', str(config.input_directory), '/inheritance:r', '/grant:r',
-                     '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', '*S-1-5-19:(OI)(CI)RX')
+                     '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', f'{SERVICE_SID}:(OI)(CI)RX')
         for directory in (config.output_directory, config.logs_directory):
-            self.run('icacls.exe', str(directory), '/grant', '*S-1-5-19:(OI)(CI)M')
+            if not _is_network_path(directory):
+                self.run('icacls.exe', str(directory), '/grant', f'{SERVICE_SID}:(OI)(CI)M')
         # Traverse user-profile ancestors without granting access to their other files.
         for directory in {root, installation.directory, config.database_path.parent, config.input_directory,
                           config.output_directory, config.logs_directory}:
+            if _is_network_path(directory):
+                continue
             for parent in directory.parents:
                 if parent == parent.parent:
                     continue
-                self.run('icacls.exe', str(parent), '/grant', '*S-1-5-19:(X)')
+                self.run('icacls.exe', str(parent), '/grant', f'{SERVICE_SID}:(X)')
         self.firewall(config, installation.origins, executable)
         self.register_shell(installation)
 

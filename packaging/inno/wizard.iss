@@ -150,7 +150,9 @@ begin
   FilesPage.Buttons[1].Enabled := not SavedTarget;
 
   FoldersPage := CreateInputDirPage(FilesPage.ID, 'Pastas da API',
-    'Escolha as pastas de trabalho.', 'Use pastas dedicadas às entradas, saídas e logs da API.', False, 'MockAiZe API');
+    'Escolha as pastas de trabalho.',
+    'Pastas locais, inclusive sem sincronização OneDrive, serão criadas se necessário. Para rede, use o caminho UNC completo; o serviço acessa o compartilhamento como a conta do computador.',
+    False, 'MockAiZe API');
   FoldersPage.Add('Entradas:');
   FoldersPage.Add('Saídas:');
   FoldersPage.Add('Logs:');

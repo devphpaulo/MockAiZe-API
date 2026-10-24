@@ -18,6 +18,7 @@ from .errors import ApiError
 from .preflight import PreflightError, check_environment
 from .uninstall import UninstallSession, checked_directory, discover_uninstall_target
 from .windows_ops import (SERVICE_EXE, Installation, Installer, WindowsDriver,
+                          _is_mapped_network_drive, _is_network_path,
                           discover_installation, validate_origins, wait_health)
 
 
@@ -119,9 +120,13 @@ def _configuration(request, installation: Installation | None) -> ApiConfig:
     config = ApiConfig.from_mapping(values)
     mapping = config.to_mapping()
     for name in ('databasePath', 'inputDirectory', 'outputDirectory', 'logsDirectory'):
-        mapping[name] = str(_absolute(mapping[name]))
-        if mapping[name].startswith('\\\\') or 'onedrive' in mapping[name].casefold():
-            raise MaintenanceError('Escolha caminhos locais disponíveis antes do login, fora de pastas de rede/OneDrive.')
+        path = _absolute(mapping[name])
+        if _is_mapped_network_drive(path):
+            raise MaintenanceError('Use o caminho UNC completo \\\\servidor\\compartilhamento; unidades de rede mapeadas não ficam disponíveis para o serviço Windows.')
+        mapping[name] = str(path)
+    config_path = request.get('configPath', '')
+    if config_path and _is_mapped_network_drive(_absolute(config_path).parent):
+        raise MaintenanceError('Use um caminho UNC completo para a configuração; unidades de rede mapeadas não ficam disponíveis para o serviço Windows.')
     return ApiConfig.from_mapping(mapping)
 
 
@@ -223,7 +228,10 @@ def execute(operation: str, request, driver=None) -> dict:
     # Existing valid configuration is intentionally preserved by Installer.install.
     # Repair gets the entered replacement only when the saved configuration is invalid.
     if installation is None:
-        directory = checked_directory(_absolute(request.get('installDir', '')), config.database_path)
+        directory = _absolute(request.get('installDir', ''))
+        if _is_network_path(directory):
+            raise MaintenanceError('Os binários do serviço precisam ficar em uma pasta local, como Program Files.')
+        directory = checked_directory(directory, config.database_path)
         if directory.exists() and any(directory.iterdir()):
             raise MaintenanceError('Escolha uma pasta vazia dedicada ao MockAiZe API. Os arquivos existentes foram preservados.')
         installation = Installation(directory, _absolute(request.get('configPath', '')), origins)

@@ -6,7 +6,7 @@ Serviço independente para consultar o SQLite do MockAíZé e gerar XML com o es
 
 Uma única cópia do runtime Python executa o serviço HTTP/XML. Não inclui PySide/Qt, Shiboken, Pythonwin, TLS/OpenSSL opcional ou cópias de Python nos frontends. As rotas e o motor foram preservados. O setup fica próximo de 11 MB e o desinstalador próximo de 2,2 MB; bytes e hashes exatos aparecem no Actions.
 
-Estado: `0.1.0.dev0`, em validação. A migração de empacotamento não constitui um laudo antimalware nem assinatura Authenticode. Os alertas das amostras antigas estão registrados na [análise do antivírus](docs/antivirus-analysis.md).
+Estado: `0.1.0.dev0`, em validação. O setup cria as pastas de trabalho ausentes, inclusive sob `C:\Users\<usuário>\OneDrive\Documentos`, mesmo quando o OneDrive não está instalado; nesse caso, o caminho é uma pasta local comum.
 
 ## Recursos
 
@@ -14,11 +14,11 @@ Estado: `0.1.0.dev0`, em validação. A migração de empacotamento não constit
 - Novo com 1 a 500 registros; Retorno separado ou misto, com comparação estrutural.
 - Entrega inline ou em diretório, sem sobrescrita; SHA-256 e tamanho exato. Nenhum ZIP de XML é gerado.
 - Chave `X-API-Key`, Problem Details, limites, idempotência e logs sanitizados.
-- Serviço LocalService com início automático e firewall opcional limitado às origens escolhidas.
+- Serviço Windows de baixa permissão, com início automático e firewall opcional limitado às origens escolhidas.
 - Atualização e reparo com parada verificada, troca de arquivos e rollback.
 - Desinstalação: confirma a remoção do serviço, pergunta sobre binários e pastas, preserva dados por padrão, informa eventual reinício e termina com OK.
 
-Documentação: [API](docs/api.md), [Windows](docs/windows-installation.md), [SQLite](docs/sqlite-format.md), [motor XML](docs/engine-compatibility.md), [validação](docs/implementation-status.md).
+As pastas de banco, entrada, saída, logs e configuração também podem usar compartilhamentos de rede. Informe o caminho UNC completo, por exemplo `\\servidor\compartilhamento\MockAiZe`; letras mapeadas não ficam disponíveis para serviços Windows. O serviço acessa SMB como a conta do computador (`DOMÍNIO\NOME-DO-PC$`), então ela precisa de permissões de leitura/escrita no compartilhamento e no NTFS. Compartilhamentos NAS que exigem credenciais próprias ainda não são compatíveis. Os binários continuam instalados localmente em Program Files.
 
 ## Download e build
 
