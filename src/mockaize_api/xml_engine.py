@@ -7,6 +7,7 @@ import re
 from datetime import datetime, timezone
 from xml.dom import Node, minidom
 from xml.parsers.expat import ExpatError
+from xml.sax.saxutils import quoteattr
 
 from .errors import ApiError
 from .formulas import check_length, evaluate, filename
@@ -163,7 +164,10 @@ def _serialize_node(node, depth=0, preserve_space=False):
     if not element_children or has_text_content:
         return node.toxml()
 
-    attributes_text = ''.join(f' {attribute.toxml()}' for attribute in node.attributes.values())
+    attributes_text = ''.join(
+        f' {attribute.name}={quoteattr(attribute.value)}'
+        for attribute in node.attributes.values()
+    )
     opening_tag = f'<{node.tagName}{attributes_text}>'
     content = [
         child for child in node.childNodes
