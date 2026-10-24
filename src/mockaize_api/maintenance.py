@@ -277,7 +277,7 @@ def _safe_message(error: Exception) -> str:
             'O serviço ainda está em execução. Pare-o e verifique novamente.',
             'O pacote do instalador está incompleto. Baixe uma versão íntegra.',
             'Existe uma cópia de recuperação anterior. Preserve-a e use outro diretório após diagnóstico.',
-            'O serviço ainda lista o serviço para exclusão. Feche consoles de serviços abertos e tente novamente; nenhum arquivo foi limpo.',
+            'O Windows ainda lista o serviço para exclusão. Feche consoles de serviços abertos e tente novamente; nenhum arquivo foi limpo.',
             'O desinstalador não foi encontrado. Repare a instalação usando o setup atualizado.',
             'Confirme primeiro a remoção do serviço no Windows.',
             'O serviço ainda não foi removido.',

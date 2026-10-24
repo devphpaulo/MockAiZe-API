@@ -39,6 +39,19 @@ def _is_mapped_network_drive(path: Path) -> bool:
     return ctypes.windll.kernel32.GetDriveTypeW(path.drive + '\\') == 4
 
 
+def _current_user_sid() -> str:
+    """Return the installing user's SID for a narrow input-folder grant."""
+    import win32api
+    import win32con
+    import win32security
+    token = win32security.OpenProcessToken(win32api.GetCurrentProcess(), win32con.TOKEN_QUERY)
+    try:
+        sid = win32security.GetTokenInformation(token, win32security.TokenUser)[0]
+        return win32security.ConvertSidToStringSid(sid)
+    finally:
+        win32api.CloseHandle(token)
+
+
 @dataclass(frozen=True)
 class Installation:
     directory: Path
@@ -293,10 +306,13 @@ class WindowsDriver:
             if not _is_network_path(directory):
                 self.run('icacls.exe', str(directory), '/grant', f'{SERVICE_SID}:(OI)(CI)RX')
         # The default input lives below the writable data root. Remove inherited
-        # write permission from that subtree while retaining admin recovery access.
+        # permissions from that subtree: the service can read files, and the
+        # installing user can add/manage them without granting the service writes.
         if not _is_network_path(config.input_directory) and config.input_directory.is_relative_to(root):
+            user_sid = _current_user_sid()
             self.run('icacls.exe', str(config.input_directory), '/inheritance:r', '/grant:r',
-                     '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', f'{SERVICE_SID}:(OI)(CI)RX')
+                     '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F',
+                     f'*{user_sid}:(OI)(CI)M', f'{SERVICE_SID}:(OI)(CI)RX')
         for directory in (config.output_directory, config.logs_directory):
             if not _is_network_path(directory):
                 self.run('icacls.exe', str(directory), '/grant', f'{SERVICE_SID}:(OI)(CI)M')
