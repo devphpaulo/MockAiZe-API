@@ -22,7 +22,7 @@ As pastas de banco, entrada, saída, logs e configuração também podem usar co
 
 ## Download e build
 
-[Baixar a distribuição Inno validada](https://github.com/devphpaulo/MockAiZe-API/actions/runs/40057766206/artifacts/12546072062): setup de 10.675.694 bytes e desinstalador de 2.156.292 bytes. [Validação completa](https://github.com/devphpaulo/MockAiZe-API/actions/runs/40057766206), commit `c5679de`.
+[Baixar o setup atualizado com suporte a caminhos UNC](https://github.com/devphpaulo/MockAiZe-API/actions/runs/40058741975/artifacts/12546506324): setup de 10.674.141 bytes e desinstalador de 2.156.292 bytes. [Actions aprovado](https://github.com/devphpaulo/MockAiZe-API/actions/runs/40058741975), commit `84f4f52`.
 
 No [workflow Windows](https://github.com/devphpaulo/MockAiZe-API/actions/workflows/build.yml), abra uma execução nativa concluída com sucesso e baixe o artefato **MockAiZe-API-Setup-Windows-x64**. Extraia o ZIP do Actions para obter os dois EXEs. Os artefatos ficam disponíveis por 30 dias.
 
