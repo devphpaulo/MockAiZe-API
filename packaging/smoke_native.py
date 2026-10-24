@@ -113,7 +113,10 @@ def main():
             health_and_catalog()
             native(repo / 'release/MockAiZeApiUninstall.exe', 'uninstall')
             assert WindowsDriver().status() == 'absent'
-            assert not any(rule.Name == 'MockAiZe API HTTP' for rule in rules)
+            # COM's Rules collection can retain its earlier enumeration. Query
+            # a fresh policy after the native processes have changed the rules.
+            remaining = win32com.client.Dispatch('HNetCfg.FwPolicy2').Rules
+            assert not any(rule.Name == 'MockAiZe API HTTP' for rule in remaining)
             assert config_path.exists(), 'O padrão da limpeza deve preservar os dados.'
             assert (target / 'MockAiZeApiService.exe').exists()
             reply = bridge('cleanup', {'cleanBinaries': '1', 'folderCount': '1', 'folder0': str(data)})
