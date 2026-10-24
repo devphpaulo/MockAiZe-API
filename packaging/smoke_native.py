@@ -75,16 +75,24 @@ def main():
                 detail = log.read_text(encoding='utf-8', errors='replace')[-6000:] if log.is_file() else ''
                 raise RuntimeError(f'Inno {phase} saiu com {process.returncode}: {detail}')
 
-        def health_and_catalog():
+        def health_and_catalog(generate=False):
             opener = build_opener(ProxyHandler({}))
             for route in ('/health', '/api/v1/files'):
                 with opener.open(Request(f'http://127.0.0.1:{port}{route}', headers={'X-API-Key': key}), timeout=10) as response:
                     assert response.status == 200
             assert WindowsDriver().status() == 'running'
+            if generate:
+                body = json.dumps({'fileId': 'file-1', 'recordCount': 3}).encode()
+                with opener.open(Request(f'http://127.0.0.1:{port}/api/v1/new', data=body,
+                                  headers={'X-API-Key': key, 'Content-Type': 'application/json'}), timeout=30) as response:
+                    manifest = json.load(response)
+                for entry in manifest['files']:
+                    content = (config.output_directory / entry['fileName']).read_bytes()
+                    assert hashlib.sha256(content).hexdigest() == entry['sha256']
 
         try:
             native(setup, 'install')
-            health_and_catalog()
+            health_and_catalog(generate=True)
             assert (target / 'MockAiZeApiConfig.exe').is_file()
             assert (target / 'MockAiZeApiUninstall.exe').is_file()
             bridge('stop')

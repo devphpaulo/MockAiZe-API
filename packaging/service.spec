@@ -9,7 +9,10 @@ a = Analysis([str(root / 'packaging' / 'service_entry.py')], pathex=[str(root / 
                             'win32com.client', 'pythoncom', '_sha2', '_sha1', '_md5', '_sha3', '_blake2'],
              # Supported API transport is HTTP. Built-in C hash modules provide
              # the same SHA-256/HMAC algorithms without bundling unused TLS/OpenSSL.
-             excludes=['PySide6', 'shiboken6', 'tkinter', 'ssl', '_ssl', '_hashlib'])
+             # COM's optional Pythonwin type-library browser and archive codecs
+             # are not part of the service's HTTP/XML or maintenance contracts.
+             excludes=['PySide6', 'shiboken6', 'tkinter', 'win32ui', 'pywin',
+                       'ssl', '_ssl', '_hashlib', '_bz2', '_lzma', '_zstd'])
 pyz = PYZ(a.pure)
 exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name='MockAiZeApiService',
           icon=str(root / 'src/mockaize_api/assets/mockaize.ico'), console=False, upx=False, contents_directory='_internal')

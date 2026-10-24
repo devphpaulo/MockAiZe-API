@@ -71,6 +71,7 @@ begin
   if RestartRequired then
     FinishedText := FinishedText + #13#10#13#10 +
       'Alguns binários estavam em uso e serão removidos após reiniciar o Windows.';
+  SuppressibleMsgBox(FinishedText, mbInformation, MB_OK, IDOK);
 end;
 
 procedure CurPageChanged(CurPageID: Integer);

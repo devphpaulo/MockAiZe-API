@@ -37,10 +37,14 @@ class BuildVerificationTests(unittest.TestCase):
     def test_qt_and_optional_tls_are_not_in_the_native_distribution(self):
         for name in ['payload/_internal/PySide6/Qt6Core.dll',
                      'payload/_internal/shiboken6/Shiboken.pyd',
-                     'payload/_internal/libcrypto-3.dll', 'payload/_internal/_ssl.pyd']:
+                     'payload/_internal/libcrypto-3.dll', 'payload/_internal/_ssl.pyd',
+                     'payload/_internal/pythonwin/win32ui.pyd']:
             with self.subTest(name=name), self.assertRaises(ValueError):
                 verification.validate_payload(self.valid_names() + [name])
 
     def test_duplicate_python_runtime_is_rejected(self):
         with self.assertRaises(ValueError):
             verification.validate_payload(self.valid_names() + ['payload/extra/python314.dll'])
+
+    def test_package_copyright_files_are_not_mistaken_for_gui_binaries(self):
+        verification.validate_payload(self.valid_names() + ['payload/licenses/pywin32/pythonwin/License.txt'])

@@ -9,6 +9,8 @@ var
   ServiceState: String;
   ServiceLabel: TNewStaticText;
   FinishedText: String;
+  ApiKeyValue: String;
+  ApiKeyEdit: TNewEdit;
 
 procedure RefreshServiceLabel;
 begin
@@ -82,6 +84,13 @@ var
   SavedTarget, SavedConfig: Boolean;
 begin
   InitializeBridge;
+  ApiKeyEdit := TNewEdit.Create(WizardForm);
+  ApiKeyEdit.Parent := WizardForm.FinishedPage;
+  ApiKeyEdit.Left := WizardForm.FinishedLabel.Left;
+  ApiKeyEdit.Top := WizardForm.FinishedLabel.Top + ScaleY(105);
+  ApiKeyEdit.Width := WizardForm.FinishedLabel.Width;
+  ApiKeyEdit.ReadOnly := True;
+  ApiKeyEdit.Visible := False;
 #if Frontend == "setup"
   InstallDirectory := ExpandConstant('{autopf64}\MockAiZe API');
   ConfigPath := ExpandConstant('{userdocs}\MockAíZé API\config.json');
@@ -166,6 +175,9 @@ begin
   OverrideFile := ExpandConstant('{param:REQUEST|}');
   if OverrideFile <> '' then begin
     if not FileExists(OverrideFile) then RaiseException('Arquivo de configuração solicitado não encontrado.');
+#if Frontend == "setup"
+    if not SavedConfig then begin
+#endif
     LocationPage.Values[0] := GetIniString('setup', 'installDir', LocationPage.Values[0], OverrideFile);
     FilesPage.Values[0] := GetIniString('setup', 'databasePath', FilesPage.Values[0], OverrideFile);
     FilesPage.Values[1] := GetIniString('setup', 'configPath', FilesPage.Values[1], OverrideFile);
@@ -176,6 +188,9 @@ begin
     NetworkPage.Values[1] := GetIniString('setup', 'origins', NetworkPage.Values[1], OverrideFile);
     if GetIniString('setup', 'firewallAccess', 'N', OverrideFile) = 'Y' then AccessPage.SelectedValueIndex := 1
     else AccessPage.SelectedValueIndex := 0;
+#if Frontend == "setup"
+    end;
+#endif
   end else if WizardSilent then
     RaiseException('A instalação silenciosa exige /REQUEST com configuração explícita.');
 #if Frontend == "setup"
@@ -258,16 +273,22 @@ begin
   end;
   OperationComplete := True;
   FinishedText := 'OK. O serviço MockAiZe API está configurado e funcionando.';
-  if ResultValue('apiKey', '') <> '' then
+  ApiKeyValue := ResultValue('apiKey', '');
+  if ApiKeyValue <> '' then
     FinishedText := FinishedText + #13#10#13#10 +
-      'Chave de acesso (copie e guarde em local seguro; será exibida apenas agora):' +
-      '' + #13#10 + ResultValue('apiKey', '');
+      'Selecione a chave abaixo e copie com Ctrl+C. Guarde em local seguro; será exibida apenas agora.';
 end;
 
 procedure CurPageChanged(CurPageID: Integer);
 begin
   if CurPageID = wpFinished then begin
     WizardForm.FinishedLabel.Caption := FinishedText;
+    WizardForm.FinishedLabel.Height := ScaleY(90);
     WizardForm.FinishedHeadingLabel.Caption := 'MockAiZe API pronto';
+    if ApiKeyValue <> '' then begin
+      ApiKeyEdit.Text := ApiKeyValue;
+      ApiKeyEdit.Visible := True;
+      ApiKeyEdit.SelectAll;
+    end;
   end;
 end;

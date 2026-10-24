@@ -44,6 +44,7 @@ OutputBaseFilename=MockAiZeApiConfig
 #else
 OutputDir={#RepositoryRoot}\build\native
 OutputBaseFilename=MockAiZeApiUninstall
+DisableFinishedPage=yes
 #endif
 
 [Languages]

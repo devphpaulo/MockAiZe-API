@@ -25,7 +25,8 @@ def validate_payload(names):
     for name in names:
         parts = name.lower().split('/')
         if (any(part.startswith(('pyside', 'shiboken', 'qt6')) for part in parts)
-                or parts[-1].startswith(('libcrypto', 'libssl', '_ssl', '_hashlib'))):
+                or ('pythonwin' in parts and 'licenses' not in parts)
+                or parts[-1].startswith(('win32ui', 'libcrypto', 'libssl', '_ssl', '_hashlib'))):
             raise ValueError('Qt ou TLS opcional entrou indevidamente na distribuição HTTP nativa.')
         if ('..' in parts or 'initial-api-docs' in parts or parts[-1] in {'credentials.json', 'config.json'}
                 or parts[-1].endswith(('.sqlite3', '.sqlite3-wal', '.sqlite3-shm'))):
