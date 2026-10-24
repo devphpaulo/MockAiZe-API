@@ -271,7 +271,25 @@ def _safe_message(error: Exception) -> str:
     if isinstance(error, FileNotFoundError):
         return 'Um arquivo ou caminho selecionado não foi encontrado. Confira os caminhos e tente novamente.'
     if isinstance(error, RuntimeError):
-        return str(error).replace('\r', ' ').replace('\n', ' ')
+        message = str(error).replace('\r', ' ').replace('\n', ' ')
+        safe_messages = {
+            'O serviço não confirmou saúde na porta salva. Consulte os logs e repare a instalação.',
+            'O serviço ainda está em execução. Pare-o e verifique novamente.',
+            'O pacote do instalador está incompleto. Baixe uma versão íntegra.',
+            'Existe uma cópia de recuperação anterior. Preserve-a e use outro diretório após diagnóstico.',
+            'O serviço ainda lista o serviço para exclusão. Feche consoles de serviços abertos e tente novamente; nenhum arquivo foi limpo.',
+            'O desinstalador não foi encontrado. Repare a instalação usando o setup atualizado.',
+            'Confirme primeiro a remoção do serviço no Windows.',
+            'O serviço ainda não foi removido.',
+            'O registro local da instalação é inválido; nenhum arquivo foi removido.',
+            'Registro da instalação inválido.',
+            'Serviço homônimo não pertence à instalação registrada.',
+            'Existe serviço homônimo sem registro do produto. Nenhuma alteração foi feita.',
+            'O caminho registrado da configuração deve ser absoluto.',
+        }
+        if message in safe_messages:
+            return message
+        return 'Falha interna durante a operação (RuntimeError). Confira as permissões e tente novamente.'
     if isinstance(error, OSError):
         code = getattr(error, 'winerror', None)
         suffix = f' (código Windows {code})' if code is not None else ''
