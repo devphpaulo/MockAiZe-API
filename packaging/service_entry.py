@@ -4,7 +4,10 @@ if __name__ == '__main__':
     import multiprocessing
     multiprocessing.freeze_support()
     import sys
-    if '--run' in sys.argv:
+    if '--maintenance' in sys.argv:
+        from mockaize_api.maintenance import main
+        raise SystemExit(main())
+    elif '--run' in sys.argv:
         import argparse
         from pathlib import Path
         from mockaize_api.runtime import serve

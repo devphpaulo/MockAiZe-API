@@ -1,52 +1,44 @@
-param([string]$Python = 'python')
+param([string]$Python = 'python', [string]$InnoCompiler = '')
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $RepositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Push-Location $RepositoryRoot
 try {
-    & $Python packaging/create_icon.py
-    if ($LASTEXITCODE -ne 0) { throw 'Falha ao preparar ícone do MockAíZé.' }
+    if (-not $InnoCompiler) {
+        $CompilerCandidates = @((Join-Path $RepositoryRoot 'build/tools/inno/ISCC.exe'),
+            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe")
+        $InnoCompiler = $CompilerCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    }
+    if (-not $InnoCompiler) { throw 'Instale Inno Setup 6.7 ou informe -InnoCompiler com o caminho de ISCC.exe.' }
+    $InnoCompiler = (Resolve-Path -LiteralPath $InnoCompiler).Path
+    if (-not (Test-Path -LiteralPath 'src/mockaize_api/assets/mockaize.ico')) { throw 'Ícone aprovado ausente.' }
     & $Python packaging/freeze.py packaging/service.spec
-    if ($LASTEXITCODE -ne 0) { throw 'Falha ao empacotar serviço.' }
-    & $Python packaging/freeze.py packaging/config.spec
-    if ($LASTEXITCODE -ne 0) { throw 'Falha ao empacotar configurador.' }
-    & $Python packaging/freeze.py packaging/uninstall.spec
-    if ($LASTEXITCODE -ne 0) { throw 'Falha ao empacotar desinstalador.' }
-    $PayloadPath = Join-Path $RepositoryRoot 'build\payload'
+    if ($LASTEXITCODE -ne 0) { throw 'Falha ao empacotar o serviço.' }
+    foreach ($Frontend in @('config', 'uninstall')) {
+        & $InnoCompiler "/DRepositoryRoot=$RepositoryRoot" "packaging/inno/$Frontend.iss"
+        if ($LASTEXITCODE -ne 0) { throw "Falha ao compilar frontend nativo $Frontend." }
+    }
+    $PayloadPath = Join-Path $RepositoryRoot 'build/payload'
     if (Test-Path -LiteralPath $PayloadPath) {
         $ResolvedPayload = (Resolve-Path -LiteralPath $PayloadPath).Path
-        if ($ResolvedPayload -ne (Join-Path $RepositoryRoot 'build\payload')) { throw 'Destino inválido.' }
+        if ($ResolvedPayload -ne [IO.Path]::GetFullPath($PayloadPath)) { throw 'Destino de payload inválido.' }
         Remove-Item -LiteralPath $ResolvedPayload -Recurse -Force
     }
     New-Item -Path $PayloadPath -ItemType Directory -Force | Out-Null
-    Copy-Item -Path 'dist\MockAiZeApiService\*' -Destination $PayloadPath -Recurse
-    Copy-Item -LiteralPath 'dist\MockAiZeApiConfig.exe' -Destination $PayloadPath
-    Copy-Item -LiteralPath 'dist\MockAiZeApiUninstall.exe' -Destination $PayloadPath
-    & $Python packaging/collect_licenses.py (Join-Path $PayloadPath 'licenses')
-    if ($LASTEXITCODE -ne 0) { throw 'Falha ao coletar licenças dos componentes.' }
-    & $Python packaging/freeze.py packaging/setup.spec
-    if ($LASTEXITCODE -ne 0) { throw 'Falha ao empacotar setup.' }
+    Copy-Item -Path 'dist/MockAiZeApiService/*' -Destination $PayloadPath -Recurse
+    Copy-Item -LiteralPath 'build/native/MockAiZeApiConfig.exe', 'build/native/MockAiZeApiUninstall.exe' -Destination $PayloadPath
+    & $Python packaging/collect_licenses.py (Join-Path $PayloadPath 'licenses') (Join-Path (Split-Path $InnoCompiler) 'license.txt')
+    if ($LASTEXITCODE -ne 0) { throw 'Falha ao coletar as licenças dos componentes.' }
+    New-Item -Path 'release' -ItemType Directory -Force | Out-Null
+    & $InnoCompiler "/DRepositoryRoot=$RepositoryRoot" 'packaging/inno/setup.iss'
+    if ($LASTEXITCODE -ne 0) { throw 'Falha ao compilar o setup Inno.' }
+    Copy-Item -LiteralPath 'build/native/MockAiZeApiUninstall.exe' -Destination 'release/MockAiZeApiUninstall.exe' -Force
     & $Python packaging/verify_binaries.py
-    if ($LASTEXITCODE -ne 0) { throw 'Executáveis inválidos ou incompletos; nada foi preparado para distribuição.' }
-    $SetupPath = Join-Path $RepositoryRoot 'dist\MockAiZe-API-Setup.exe'
-    try {
-        $SetupHash = (Get-FileHash -LiteralPath $SetupPath -Algorithm SHA256 -ErrorAction Stop).Hash
-    } catch {
-        throw 'O instalador final não está disponível. Confira o histórico do antivírus; não desative a proteção nem distribua artefatos incompletos.'
-    }
-    $ReleasePath = Join-Path $RepositoryRoot 'release'
-    New-Item -Path $ReleasePath -ItemType Directory -Force | Out-Null
-    Copy-Item -LiteralPath $SetupPath -Destination (Join-Path $ReleasePath 'MockAiZe-API-Setup.exe') -Force
-    Copy-Item -LiteralPath (Join-Path $RepositoryRoot 'dist\MockAiZeApiUninstall.exe') -Destination $ReleasePath -Force
-    Write-Output "Instalador Windows: release\MockAiZe-API-Setup.exe"
-    Write-Output "Desinstalador Windows: release\MockAiZeApiUninstall.exe"
-    Write-Output "SHA-256: $SetupHash"
-    # PKG is PyInstaller's temporary archive, never a distribution deliverable.
-    foreach ($PkgRelative in @('build\service\MockAiZeApiService.pkg', 'build\config\MockAiZeApiConfig.pkg', 'build\uninstall\MockAiZeApiUninstall.pkg', 'build\setup\MockAiZe-API-Setup.pkg')) {
-        $PkgPath = [IO.Path]::GetFullPath((Join-Path $RepositoryRoot $PkgRelative))
-        if (-not $PkgPath.StartsWith($RepositoryRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw 'Intermediário fora do workspace.' }
-        if (Test-Path -LiteralPath $PkgPath) { Remove-Item -LiteralPath $PkgPath -Force }
-    }
+    if ($LASTEXITCODE -ne 0) { throw 'Verificação do pacote nativo falhou; não distribua o resultado.' }
+    $PkgPath = [IO.Path]::GetFullPath((Join-Path $RepositoryRoot 'build/service/MockAiZeApiService.pkg'))
+    if (-not $PkgPath.StartsWith($RepositoryRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw 'Intermediário fora do projeto.' }
+    if (Test-Path -LiteralPath $PkgPath) { Remove-Item -LiteralPath $PkgPath -Force }
+    Get-Item -LiteralPath 'release/MockAiZe-API-Setup.exe', 'release/MockAiZeApiUninstall.exe' | Select-Object Name,Length
 } finally {
     Pop-Location
 }

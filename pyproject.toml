@@ -11,15 +11,11 @@ requires-python = ">=3.11"
 dependencies = ["tzdata>=2025.2"]
 
 [project.optional-dependencies]
-windows = ["pywin32>=311; sys_platform == 'win32'", "PySide6-Essentials>=6.8,<7"]
+windows = ["pywin32>=311; sys_platform == 'win32'"]
 packaging = ["pyinstaller>=6.22,<7", "build>=1.3,<2"]
 
 [project.scripts]
 mockaize-api = "mockaize_api.cli:main"
-
-[project.gui-scripts]
-mockaize-api-setup = "mockaize_api.setup_ui:main"
-mockaize-api-uninstall = "mockaize_api.uninstall_ui:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/mockaize_api"]

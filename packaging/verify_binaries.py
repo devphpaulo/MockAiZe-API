@@ -1,4 +1,4 @@
-"""Verifica PE x64, ícone, UAC e payload sem executar instaladores elevados."""
+"""Verifica serviço x64, frontends Inno, ícones e payload sem executar instaladores."""
 import argparse
 import hashlib
 import json
@@ -7,21 +7,26 @@ from pathlib import Path
 import struct
 import sys
 
-EXECUTABLES = {'MockAiZe-API-Setup.exe': True, 'MockAiZeApiConfig.exe': True,
-               'MockAiZeApiUninstall.exe': True,
-               'MockAiZeApiService/MockAiZeApiService.exe': False}
+EXECUTABLES = {'release/MockAiZe-API-Setup.exe': (True, 0x14c, 20_000_000),
+               'build/payload/MockAiZeApiConfig.exe': (True, 0x14c, 3_000_000),
+               'release/MockAiZeApiUninstall.exe': (True, 0x14c, 3_000_000),
+               'build/payload/MockAiZeApiService.exe': (False, 0x8664, 5_000_000)}
 
 
 def validate_payload(names):
     names = {name.replace('\\', '/') for name in names}
     required = {'payload/MockAiZeApiService.exe', 'payload/MockAiZeApiConfig.exe',
-                'payload/MockAiZeApiUninstall.exe', 'mockaize_api/assets/mockaize-favicon.png',
-                'payload/licenses/free-software-terms/LGPL-3.0.txt'}
-    if not required.issubset(names) or not any(
-            name.startswith('payload/_internal/python') and name.endswith('.dll') for name in names):
-        raise ValueError('O setup não contém todos os executáveis, runtime, ícone e licenças.')
+                'payload/MockAiZeApiUninstall.exe', 'payload/licenses/PYTHON-LICENSE.txt',
+                'payload/licenses/Inno-Setup-LICENSE.txt'}
+    runtimes = [name for name in names if Path(name).name.lower().startswith('python3')
+                and name.lower().endswith('.dll') and Path(name).name.lower() != 'python3.dll']
+    if not required.issubset(names) or len(runtimes) != 1 or not runtimes[0].startswith('payload/_internal/'):
+        raise ValueError('O pacote deve conter os frontends nativos, um runtime Python e as licenças.')
     for name in names:
         parts = name.lower().split('/')
+        if (any(part.startswith(('pyside', 'shiboken', 'qt6')) for part in parts)
+                or parts[-1].startswith(('libcrypto', 'libssl', '_ssl', '_hashlib'))):
+            raise ValueError('Qt ou TLS opcional entrou indevidamente na distribuição HTTP nativa.')
         if ('..' in parts or 'initial-api-docs' in parts or parts[-1] in {'credentials.json', 'config.json'}
                 or parts[-1].endswith(('.sqlite3', '.sqlite3-wal', '.sqlite3-shm'))):
             raise ValueError('O setup contém arquivo privado ou caminho não permitido.')
@@ -53,14 +58,14 @@ def resource_data(pe, kind):
     return values
 
 
-def verify_pe(path, expected_icons, elevated):
+def verify_pe(path, expected_icons, elevated, machine=0x8664):
     import pefile
     if not path.is_file():
         raise ValueError(f'Executável ausente: {path.name}. Confira o histórico do antivírus.')
     pe = pefile.PE(str(path), fast_load=True)
     try:
-        if pe.FILE_HEADER.Machine != 0x8664:
-            raise ValueError(f'{path.name} não é um executável Windows x64.')
+        if pe.FILE_HEADER.Machine != machine:
+            raise ValueError(f'{path.name} possui arquitetura inesperada.')
         pe.parse_data_directories(directories=[pefile.DIRECTORY_ENTRY['IMAGE_DIRECTORY_ENTRY_RESOURCE']])
         actual = {hashlib.sha256(frame).hexdigest() for frame in resource_data(pe, 3)}
         if not resource_data(pe, 14) or not expected_icons.issubset(actual):
@@ -71,32 +76,34 @@ def verify_pe(path, expected_icons, elevated):
         pe.close()
 
 
-def verify_build(dist, icon):
-    from PyInstaller.archive.readers import CArchiveReader
+def verify_build(root, icon):
     expected_icons = icon_frames(icon)
     result = []
-    for relative, elevated in EXECUTABLES.items():
-        path = dist / relative
-        verify_pe(path, expected_icons, elevated)
+    for relative, (elevated, machine, budget) in EXECUTABLES.items():
+        path = root / relative
+        # Inno's loader is asInvoker and requests elevation itself according to
+        # PrivilegesRequired. It does not use PyInstaller's requireAdmin manifest.
+        verify_pe(path, expected_icons, elevated and machine != 0x14c, machine)
+        if path.stat().st_size > budget:
+            raise ValueError(f'{path.name} excede o orçamento de tamanho ({budget} bytes).')
         with path.open('rb') as stream:
             digest = hashlib.file_digest(stream, 'sha256').hexdigest()
         result.append({'fileName': path.name, 'sizeBytes': path.stat().st_size,
                        'sha256': digest})
-    validate_payload(CArchiveReader(str(dist / 'MockAiZe-API-Setup.exe')).toc)
-    for name in ['MockAiZeApiConfig.exe', 'MockAiZeApiUninstall.exe']:
-        names = {item.replace('\\', '/') for item in CArchiveReader(str(dist / name)).toc}
-        if 'mockaize_api/assets/mockaize-favicon.png' not in names:
-            raise ValueError(f'{name} não contém o ícone da janela.')
+    validate_payload(['payload/' + str(path.relative_to(root / 'build/payload')).replace('\\', '/')
+                      for path in (root / 'build/payload').rglob('*') if path.is_file()])
+    if 'PrivilegesRequired=admin' not in (root / 'packaging/inno/common.iss').read_text(encoding='utf-8'):
+        raise ValueError('Os frontends Inno devem solicitar elevação antes das operações de manutenção.')
     return result
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dist', type=Path, default=Path('dist'))
+    parser.add_argument('--root', type=Path, default=Path('.'))
     parser.add_argument('--icon', type=Path, default=Path('src/mockaize_api/assets/mockaize.ico'))
     args = parser.parse_args()
     try:
-        result = verify_build(args.dist, args.icon)
+        result = verify_build(args.root, args.icon)
     except Exception as error:
         print(f'Validação do build falhou: {error}', file=sys.stderr)
         return 1
@@ -107,7 +114,7 @@ def main():
             stream.write('## Executáveis Windows verificados\n\nArquivo | Bytes | SHA-256\n---|---:|---\n')
             for entry in result:
                 stream.write(f'{entry["fileName"]} | {entry["sizeBytes"]} | `{entry["sha256"]}`\n')
-            stream.write('\nÍcone MockAíZé, arquitetura x64, elevação e payload conferidos.\n')
+            stream.write('\nServiço x64; frontends Inno nativos; ícones, elevação, licenças e um único runtime conferidos. Sem Qt.\n')
     return 0
 
 

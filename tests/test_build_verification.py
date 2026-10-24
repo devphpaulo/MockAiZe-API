@@ -12,8 +12,8 @@ class BuildVerificationTests(unittest.TestCase):
     def valid_names(self):
         return ['payload/MockAiZeApiService.exe', 'payload/MockAiZeApiConfig.exe',
                 'payload/MockAiZeApiUninstall.exe', 'payload/_internal/python314.dll',
-                'payload/licenses/free-software-terms/LGPL-3.0.txt',
-                'mockaize_api/assets/mockaize-favicon.png']
+                'payload/licenses/PYTHON-LICENSE.txt',
+                'payload/licenses/Inno-Setup-LICENSE.txt']
 
     def test_complete_setup_payload_accepts_windows_archive_separators(self):
         verification.validate_payload([name.replace('/', '\\') for name in self.valid_names()])
@@ -33,3 +33,14 @@ class BuildVerificationTests(unittest.TestCase):
                      'payload/config.json', 'payload/client.sqlite3', '../escape.exe']:
             with self.subTest(name=name), self.assertRaises(ValueError):
                 verification.validate_payload(self.valid_names() + [name])
+
+    def test_qt_and_optional_tls_are_not_in_the_native_distribution(self):
+        for name in ['payload/_internal/PySide6/Qt6Core.dll',
+                     'payload/_internal/shiboken6/Shiboken.pyd',
+                     'payload/_internal/libcrypto-3.dll', 'payload/_internal/_ssl.pyd']:
+            with self.subTest(name=name), self.assertRaises(ValueError):
+                verification.validate_payload(self.valid_names() + [name])
+
+    def test_duplicate_python_runtime_is_rejected(self):
+        with self.assertRaises(ValueError):
+            verification.validate_payload(self.valid_names() + ['payload/extra/python314.dll'])

@@ -5,9 +5,9 @@ import shutil
 import sys
 
 
-def collect(destination: Path) -> None:
+def collect(destination: Path, inno_license: Path | None = None) -> None:
     destination.mkdir(parents=True, exist_ok=True)
-    for package in ('PySide6-Essentials', 'shiboken6', 'pyinstaller', 'pywin32', 'tzdata'):
+    for package in ('pyinstaller', 'pywin32', 'tzdata'):
         dist = distribution(package)
         target = destination / package
         target.mkdir(exist_ok=True)
@@ -29,10 +29,9 @@ def collect(destination: Path) -> None:
     notices = Path(__file__).resolve().parent.parent / 'THIRD_PARTY_NOTICES.md'
     if notices.is_file():
         shutil.copy2(notices, destination / notices.name)
-    additional = Path(__file__).resolve().parent / 'licenses'
-    if additional.is_dir():
-        shutil.copytree(additional, destination / 'free-software-terms', dirs_exist_ok=True)
+    if inno_license:
+        shutil.copy2(inno_license, destination / 'Inno-Setup-LICENSE.txt')
 
 
 if __name__ == '__main__':
-    collect(Path(sys.argv[1]))
+    collect(Path(sys.argv[1]), Path(sys.argv[2]) if len(sys.argv) > 2 else None)

@@ -199,7 +199,7 @@ class Installer:
 class WindowsDriver:
     @staticmethod
     def run(*args):
-        return subprocess.run(args, check=True, capture_output=True, text=True,
+        return subprocess.run(args, check=True, capture_output=True, text=True, errors='replace',
                               creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
 
     def status(self):
@@ -263,6 +263,7 @@ class WindowsDriver:
         root = installation.config_path.parent
         self.run('icacls.exe', str(root), '/inheritance:r', '/grant:r',
                  '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', '*S-1-5-19:(OI)(CI)M')
+        self.run('icacls.exe', str(installation.directory), '/grant', '*S-1-5-19:(OI)(CI)RX')
         # Only the configured input and database tree receive read permissions.
         for directory in (config.input_directory, config.database_path.parent):
             self.run('icacls.exe', str(directory), '/grant', '*S-1-5-19:(OI)(CI)RX')
@@ -274,7 +275,7 @@ class WindowsDriver:
         for directory in (config.output_directory, config.logs_directory):
             self.run('icacls.exe', str(directory), '/grant', '*S-1-5-19:(OI)(CI)M')
         # Traverse user-profile ancestors without granting access to their other files.
-        for directory in {root, config.database_path.parent, config.input_directory,
+        for directory in {root, installation.directory, config.database_path.parent, config.input_directory,
                           config.output_directory, config.logs_directory}:
             for parent in directory.parents:
                 if parent == parent.parent:
@@ -341,7 +342,9 @@ class WindowsDriver:
         for path in sorted(directory.rglob('*'), key=lambda p: len(p.parts), reverse=True):
             try:
                 path.rmdir() if path.is_dir() else path.unlink()
-            except PermissionError:
+            except OSError as error:
+                if not isinstance(error, PermissionError) and getattr(error, 'winerror', None) not in (5, 32, 33, 145):
+                    raise
                 win32api.MoveFileEx(str(path), None, win32con.MOVEFILE_DELAY_UNTIL_REBOOT)
                 delayed = True
         try:
