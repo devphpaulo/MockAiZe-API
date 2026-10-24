@@ -300,15 +300,9 @@ class WindowsDriver:
         for directory in (config.output_directory, config.logs_directory):
             if not _is_network_path(directory):
                 self.run('icacls.exe', str(directory), '/grant', f'{SERVICE_SID}:(OI)(CI)M')
-        # Traverse user-profile ancestors without granting access to their other files.
-        for directory in {root, installation.directory, config.database_path.parent, config.input_directory,
-                          config.output_directory, config.logs_directory}:
-            if _is_network_path(directory):
-                continue
-            for parent in directory.parents:
-                if parent == parent.parent:
-                    continue
-                self.run('icacls.exe', str(parent), '/grant', f'{SERVICE_SID}:(X)')
+        # NetworkService has SeChangeNotifyPrivilege by default, which permits
+        # traversing parent directories without changing ACLs on the user's
+        # profile, OneDrive root, or other unrelated ancestors.
         self.firewall(config, installation.origins, executable)
         self.register_shell(installation)
 

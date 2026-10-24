@@ -9,6 +9,7 @@ import argparse
 import configparser
 import os
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 
@@ -256,6 +257,25 @@ def execute(operation: str, request, driver=None) -> dict:
 def _safe_message(error: Exception) -> str:
     if isinstance(error, (MaintenanceError, ConfigurationError, PreflightError, ApiError)):
         return str(error).replace('\r', ' ').replace('\n', ' ')
+    if isinstance(error, subprocess.CalledProcessError):
+        command = Path(str(error.cmd[0])).name.casefold() if error.cmd else 'Windows'
+        if command == 'icacls.exe':
+            return f'O Windows recusou configurar as permissões de uma pasta (icacls, código {error.returncode}). Confira as permissões do caminho selecionado.'
+        if command == 'sc.exe':
+            return f'O Windows recusou configurar ou iniciar o serviço (SCM, código {error.returncode}).'
+        if command == 'netsh.exe':
+            return f'O Windows recusou configurar a regra de firewall (código {error.returncode}).'
+        return f'Um componente do Windows recusou a operação (código {error.returncode}).'
+    if isinstance(error, PermissionError):
+        return 'Acesso negado ao banco, a uma pasta selecionada ou ao serviço. Confira as permissões e tente novamente.'
+    if isinstance(error, FileNotFoundError):
+        return 'Um arquivo ou caminho selecionado não foi encontrado. Confira os caminhos e tente novamente.'
+    if isinstance(error, RuntimeError):
+        return str(error).replace('\r', ' ').replace('\n', ' ')
+    if isinstance(error, OSError):
+        code = getattr(error, 'winerror', None)
+        suffix = f' (código Windows {code})' if code is not None else ''
+        return f'O Windows não conseguiu acessar um arquivo, uma pasta ou um recurso{suffix}. Confira os caminhos e permissões.'
     return 'Não foi possível concluir a operação. Verifique o estado do serviço, as permissões e os logs da instalação.'
 
 

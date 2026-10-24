@@ -4,8 +4,9 @@ const
 
 var
   BridgeExe, RequestFile, ResultFile, InstallDirectory, ConfigPath: String;
+  BridgeLastError: String;
   BusyPage: TOutputProgressWizardPage;
-  DiagnosticMode, OperationComplete: Boolean;
+  DiagnosticMode, OperationComplete, ShowBridgeErrors: Boolean;
 
 function InitializeSetup: Boolean;
 begin
@@ -17,6 +18,8 @@ end;
 
 procedure InitializeBridge;
 begin
+  ShowBridgeErrors := True;
+  BridgeLastError := '';
   RequestFile := ExpandConstant('{tmp}\maintenance-request.ini');
   ResultFile := ExpandConstant('{tmp}\maintenance-result.ini');
   BusyPage := CreateOutputProgressPage('MockAiZe API', 'Aguarde a conclusão da operação.');
@@ -53,6 +56,7 @@ var
   MessageText: String;
 begin
   Result := False;
+  BridgeLastError := '';
   if not FileExists(BridgeExe) then begin
     MsgBox('O serviço do MockAiZe API não foi encontrado. Execute novamente o instalador para reparar os binários.', mbError, MB_OK);
     Exit;
@@ -64,9 +68,9 @@ begin
     if not Exec(BridgeExe, '--maintenance ' + Operation + ' --request ' +
       AddQuotes(RequestFile) + ' --result ' + AddQuotes(ResultFile),
       ExtractFileDir(BridgeExe), SW_HIDE, ewWaitUntilTerminated, Code) then begin
-      MessageText := 'Não foi possível iniciar o componente de manutenção: ' + SysErrorMessage(Code);
+      BridgeLastError := 'Não foi possível iniciar o componente de manutenção: ' + SysErrorMessage(Code);
     end else if (Code <> 0) or (ResultValue('ok', '0') <> '1') then begin
-      MessageText := ResultValue('message', 'A operação não foi concluída. Consulte os logs do MockAiZe API.');
+      BridgeLastError := ResultValue('message', 'A operação não foi concluída. Confira os caminhos e permissões selecionados.');
     end else begin
       Result := True;
       BusyPage.SetProgress(1, 1);
@@ -74,8 +78,10 @@ begin
   finally
     BusyPage.Hide;
   end;
-  if not Result then
-    MsgBox(MessageText, mbError, MB_OK);
+  if not Result then begin
+    MessageText := BridgeLastError;
+    if ShowBridgeErrors then MsgBox(MessageText, mbError, MB_OK);
+  end;
 end;
 
 procedure FindInstalledBridge;

@@ -265,12 +265,23 @@ begin
     Exit;
   end;
 #if Frontend == "setup"
-  Success := CallBridge('install', 'Instalando o serviço e verificando a saúde da API...');
+  ShowBridgeErrors := False;
+  try
+    Success := CallBridge('install', 'Instalando o serviço e verificando a saúde da API...');
+  finally
+    ShowBridgeErrors := True;
+  end;
 #else
-  Success := CallBridge('configure', 'Salvando configuração e verificando a saúde da API...');
+  ShowBridgeErrors := False;
+  try
+    Success := CallBridge('configure', 'Salvando configuração e verificando a saúde da API...');
+  finally
+    ShowBridgeErrors := True;
+  end;
 #endif
   if not Success then begin
-    Result := 'A operação falhou. Confira os dados e os logs antes de tentar novamente.';
+    Result := BridgeLastError;
+    if Result = '' then Result := 'A operação falhou. Confira os caminhos e permissões selecionados.';
     Exit;
   end;
   OperationComplete := True;
