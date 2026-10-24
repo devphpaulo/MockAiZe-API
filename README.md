@@ -1,51 +1,42 @@
 # MockAíZé API para Windows
 
-Serviço independente para consultar configurações salvas do MockAíZé e gerar XML. O estúdio pode ficar fechado. A API lê seu SQLite somente para consulta e mantém contadores e idempotência em uma base própria.
+Serviço independente para consultar o SQLite do MockAíZé e gerar XML com o estúdio fechado. O banco de origem é somente leitura; contadores e idempotência ficam numa base própria.
 
-**Entrega Windows x64: `MockAiZe-API-Setup.exe` e `MockAiZeApiUninstall.exe`.** O assistente instala serviço, configurador e desinstalador em Program Files. Os executáveis usam o ícone do MockAíZé. Não é necessário instalar Python ou operar um terminal. `.pkg` é intermediário interno de build e nunca é entregue.
+**Instalação e configuração nativas com Inno Setup, sem Qt.** A distribuição contém `MockAiZe-API-Setup.exe` e `MockAiZeApiUninstall.exe`. O setup instala o serviço, o configurador e o desinstalador em uma pasta dedicada de Program Files, todos com o ícone do MockAíZé. Não é necessário instalar Python no computador de destino.
 
-**Estado: implementação em validação, `0.1.0.dev0`.** O [novo build Windows](https://github.com/devphpaulo/MockAiZe-API/actions/runs/39904195078) corrige o conflito de DLL no QtCore e disponibiliza [setup e desinstalador recompilados](https://github.com/devphpaulo/MockAiZe-API/actions/runs/39904195078/artifacts/12480192765). Os 136 testes e os diagnósticos gráficos dos três EXEs passaram no Actions. O setup anterior foi detectado pelo Kaspersky como `HEUR:Trojan.Win32.Generic`; o acesso ao novo setup local também foi bloqueado. A correção funcional não confirma falso positivo nem ausência de malware. Os artefatos são de desenvolvimento e não estão homologados para distribuição. Leia a [análise da detecção e do tamanho](docs/antivirus-analysis.md). Boot, ACLs e firewall também precisam de homologação em VM antes da release estável.
+Uma única cópia do runtime Python executa o serviço HTTP/XML. Não inclui PySide/Qt, Shiboken, Pythonwin, TLS/OpenSSL opcional ou cópias de Python nos frontends. As rotas e o motor foram preservados. O setup fica próximo de 11 MB e o desinstalador próximo de 2,2 MB; bytes e hashes exatos aparecem no Actions.
+
+Estado: `0.1.0.dev0`, em validação. A migração de empacotamento não constitui um laudo antimalware nem assinatura Authenticode. Os alertas das amostras antigas estão registrados na [análise do antivírus](docs/antivirus-analysis.md).
 
 ## Recursos
 
-- Saúde em `/health`; catálogo de arquivos, modos e modelos de retorno autenticado.
-- Novo: um XML com 1 a 500 registros solicitados.
-- Retorno: entrada salva, enviada ou arquivo autorizado; comparação estrutural antes da geração.
-- `apart` gera arquivos separados; `mixed` intercala modelos compatíveis em um XML.
-- Saída inline ou em diretório, sem sobrescrita; SHA-256 e tamanho exato.
-- `X-API-Key`, Problem Details, limites operacionais, idempotência e logs sanitizados.
-- Assistente Qt desktop; serviço automático separado; atualização com parada verificada e rollback. Desinstalador separado remove o serviço, pergunta sobre limpeza dos binários/pastas, mostra OK e fecha; preserva dados por padrão.
+- `/health`; catálogo autenticado de arquivos, modos e modelos de retorno.
+- Novo com 1 a 500 registros; Retorno separado ou misto, com comparação estrutural.
+- Entrega inline ou em diretório, sem sobrescrita; SHA-256 e tamanho exato. Nenhum ZIP de XML é gerado.
+- Chave `X-API-Key`, Problem Details, limites, idempotência e logs sanitizados.
+- Serviço LocalService com início automático e firewall opcional limitado às origens escolhidas.
+- Atualização e reparo com parada verificada, troca de arquivos e rollback.
+- Desinstalação: confirma a remoção do serviço, pergunta sobre binários e pastas, preserva dados por padrão, informa eventual reinício e termina com OK.
 
-Documentação: [API](docs/api.md), [Windows](docs/windows-installation.md), [SQLite](docs/sqlite-format.md), [motor XML](docs/engine-compatibility.md), [evidências e pendências](docs/implementation-status.md).
+Documentação: [API](docs/api.md), [Windows](docs/windows-installation.md), [SQLite](docs/sqlite-format.md), [motor XML](docs/engine-compatibility.md), [validação](docs/implementation-status.md).
 
-## Desenvolvimento Windows
+## Download e build
 
-Python 3.11 ou superior. O CI testa Windows com Python 3.11 e 3.14. Dependências: tzdata para fusos, PySide6 Essentials para a janela e pywin32 para integração Windows.
+[Baixar a distribuição Inno validada](https://github.com/devphpaulo/MockAiZe-API/actions/runs/40057766206/artifacts/12546072062): setup de 10.675.694 bytes e desinstalador de 2.156.292 bytes. [Validação completa](https://github.com/devphpaulo/MockAiZe-API/actions/runs/40057766206), commit `c5679de`.
+
+No [workflow Windows](https://github.com/devphpaulo/MockAiZe-API/actions/workflows/build.yml), abra uma execução nativa concluída com sucesso e baixe o artefato **MockAiZe-API-Setup-Windows-x64**. Extraia o ZIP do Actions para obter os dois EXEs. Os artefatos ficam disponíveis por 30 dias.
+
+O Actions testa Python 3.11/3.14, instala o pacote fora do checkout e compila a distribuição. Depois verifica arquitetura, ícones, composição, licenças e tamanho; testa o serviço compilado com HTTP/XML reais; e instala, configura, repara e desinstala o produto no runner Windows descartável. Falhas impedem o upload.
+
+Para desenvolver, use Python 3.11 ou superior. Para compilar, instale também Inno Setup 6.7 ou superior:
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python -m pip install -e '.[windows,packaging]'
 .\.venv\Scripts\python -W error::ResourceWarning -m unittest discover -s tests -v
-```
-
-Copie `packaging/config.example.json` para um `config.json` local e ajuste os caminhos absolutos para banco e pastas existentes. Para desenvolvimento em primeiro plano:
-
-```powershell
-.\.venv\Scripts\mockaize-api --config 'C:\caminho\config.json' --check
-.\.venv\Scripts\mockaize-api --config 'C:\caminho\config.json' --create-key
-.\.venv\Scripts\mockaize-api --config 'C:\caminho\config.json' --serve
-```
-
-Guarde a chave mostrada uma única vez; somente seu hash é persistido em `credentials.json`, fora do JSON comum e dos logs. `--rotate-key` invalida a chave anterior. `--check` verifica JSON, SQLite genérico, pastas e porta; o startup também verifica schema, credencial e estado. Nada abre navegador ou inicia o estúdio. `python -m mockaize_api.setup_ui --preview` mostra a janela sem instalar serviço.
-
-## Build e entrega
-
-```powershell
 .\packaging\build.ps1 -Python .\.venv\Scripts\python.exe
 ```
 
-Os executáveis finais ficam em `release/`; os hashes SHA-256 aparecem no resultado do build e no resumo do Actions. O build verifica arquitetura Windows x64, ícones, elevação, runtime, licenças e conteúdo do instalador antes de preparar a entrega. `build/` e `dist/` contêm intermediários. Arquivos `.pkg` conhecidos são removidos após sucesso, mas isso não evita uma detecção durante sua criação. Não desative o antivírus nem distribua resultado incompleto.
+O build usa o ICO aprovado já versionado. `release/` contém somente os dois EXEs; `build/` e `dist/` são intermediários. `.pkg` não é entregue. O planejamento `initial-api-docs/` permanece local e ignorado pelo Git.
 
-O [workflow Windows](https://github.com/devphpaulo/MockAiZe-API/actions/workflows/build.yml) executa automaticamente em pushes e pull requests, e também aceita acionamento manual. Primeiro testa Python 3.11/3.14 e a instalação do pacote fora do checkout; depois compila os quatro executáveis com busca de DLLs isolada, confere seu conteúdo e exercita o serviço compilado com HTTP/XML reais. Os três EXEs gráficos também precisam carregar Qt, o plugin Windows e o ícone e renderizar uma janela de diagnóstico sem alterar a instalação. Somente após sucesso disponibiliza o artefato **MockAiZe-API-Setup-Windows-x64** por 30 dias. O download é um ZIP do Actions contendo apenas o setup e o desinstalador `.exe`; extraia antes de executar. Wheels e `.pkg` não são publicados.
-
-O build e o runtime não dependem de checkout, módulos, JavaScript ou scripts do estúdio. A única integração operacional é o SQLite v2; formatos desconhecidos são rejeitados, nunca migrados. Planejamento interno permanece apenas na cópia local e fora do GitHub/pacote.
+Para desenvolvimento em primeiro plano, copie `packaging/config.example.json` para um JSON local e ajuste caminhos absolutos. Use `mockaize-api --config <caminho> --check`, `--create-key` e `--serve`. A chave é exibida apenas na criação; somente seu hash fica em `credentials.json`. No produto instalado, use o configurador nativo no menu Iniciar.

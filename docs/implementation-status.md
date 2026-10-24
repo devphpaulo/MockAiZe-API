@@ -1,58 +1,46 @@
 # Estado da implementação Windows
 
-Atualizado em 23/10/2026. Repositório público; planejamento interno fora do Git e preservado localmente. Nenhum arquivo do estúdio foi alterado.
+Atualizado em 24/10/2026. Repositório público; `initial-api-docs` permanece somente local e ignorado pelo Git.
 
-| Cards | Entrega | Evidência / limite |
-|---|---|---|
-| COD-00/01 | Pacote/configuração/entrada/preflight | Testes de JSON, arquivos, permissões e porta; startup valida dependências |
-| COD-02/03 | SQLite v2, snapshot/WAL, catálogo | Fixtures versionadas, exclusão de ancestrais, revisão concorrente e fonte somente leitura |
-| COD-04–10 | Motor Python, 20 fórmulas, estrutura, Novo/Retorno | Testes de namespaces, atributos, segundo registro, 500 registros, ciclos/políticas/datas e composição |
-| COD-11–13 / AD-01 | Publicação, HTTP, autenticação, estado/logs | HTTP real, hashes, entrada isolada, replay/conflito, falha parcial e logs sanitizados |
-| COD-14/15/17–20 | SCM, assistente Qt, atualização/reparo/configuração/remoção | Testes Windows com driver simulado e renderização Qt; sem instalar no computador do usuário |
-| COD-16 | Build Windows, setup e desinstalador | Quatro EXEs verificados no Actions; dois EXEs publicados como artefato |
-| CT-01/02 / TES-01 | Cenários executáveis em tests | 136 testes aprovados no CI Windows com Python 3.11/3.14; diagnósticos Qt dos três EXEs aprovados |
-| TES-02 | Instalação elevada, boot, ACLs e rede | Pendente em VM; teste simulado não substitui essa evidência |
-| DOC-01 | Guia de uso e evidências | Disponível; release estável ainda não aprovada |
+## Distribuição atual
 
-## Decisões implementadas
+Instalador, configurador e desinstalador nativos em Inno Setup. O serviço HTTP/XML mantém um único runtime Python em `onedir`; Qt/PySide, Shiboken, Pythonwin e OpenSSL opcional foram removidos da distribuição. As cinco rotas funcionais e `/health` permanecem.
 
-Windows x64; assistente Qt Widgets nativo com tema preto/verde e serviço sem UI separado. Conta LocalService, credencial de alta entropia com hash fora do JSON, estado próprio v1, rede HTTP com origens configuráveis (LocalSubnet padrão), replay 24h e logs 30 dias. Padrões operacionais estão documentados e podem ser ajustados; não são apresentados como decisões anteriores do usuário.
+O setup local mede 10.627.232 bytes, contra 138.593.152 bytes da distribuição Qt anterior (redução de aproximadamente 92%). O desinstalador mede 2.156.292 bytes; o executável do serviço, 3.187.573 bytes. Esses números identificam o build local; o Actions registra seus próprios tamanhos e hashes.
 
-Entrega em EXE: `MockAiZe-API-Setup.exe` e o desinstalador solicitado `MockAiZeApiUninstall.exe`, ambos com ícone do MockAíZé. `.pkg` é intermediário interno, removido após build bem-sucedido e nunca publicado. Pipeline automático em pushes/pull requests e acionamento manual; o artefato do Actions contém somente os dois EXEs e expira em 30 dias. Planejamento interno não entra no pacote ou repositório.
-
-Desinstalação atualizada: parada/exclusão do serviço confirmadas antes de perguntar sobre binários e pastas; nenhuma limpeza automática por padrão. Destinos são conferidos antes de excluir, com proteção do SQLite do estúdio e rejeição de links/junções. O fluxo termina com OK e avisa quando arquivos em uso exigirem reinício. O executável foi compilado e verificado; a homologação privilegiada em VM permanece pendente.
-
-## Evidências
-
-Python 3.14 no Windows local: **136 testes executados, 135 aprovados e um ignorado** (a conta local não permite criar symlink). A rejeição de reparse points também tem um caso determinístico aprovado. A suíte usa avisos de recursos como erro, HTTP real, subprocessos de geração e janelas Qt com serviço/limpeza simulados. No [Actions 39904195078](https://github.com/devphpaulo/MockAiZe-API/actions/runs/39904195078), os 136 testes passaram em Python 3.11 e 3.14, incluindo Qt/pywin32 e verificação do pacote instalado fora do checkout.
-
-O teste do novo desinstalador encontrou uma falha no encaminhamento dos sinais entre threads; a interface agora recebe conclusão/erro através de slots QObject na thread principal. Casos aprovados cobrem tanto confirmação de remoção antes das perguntas e fechamento com OK quanto falha do serviço sem oferecer limpeza.
-
-Smoke do serviço compilado sem registrar SCM/firewall passou no Actions: saúde, catálogo, Novo com 500 registros inline/hash, dois arquivos apart e dois registros mixed. Novo levou cerca de 0,58 s no runner em fixture simples, sem representar carga real.
-
-O build verificou arquitetura x64, os frames do ícone original em cada PE, elevação dos três executáveis gráficos, origem das bibliotecas e inclusão do runtime, dos executáveis, do ícone da janela e das licenças. O payload foi conferido para excluir planejamento, configuração, credenciais e SQLite. O [novo artefato de desenvolvimento](https://github.com/devphpaulo/MockAiZe-API/actions/runs/39904195078/artifacts/12480192765) contém setup (138.593.152 bytes) e desinstalador (42.603.520 bytes). SHA-256:
-
-| Arquivo | SHA-256 |
+| Entrega | Evidência / limite |
 |---|---|
-| MockAiZe-API-Setup.exe | `b77093cd67f4cb9c4fdf6589539727e1885f989d74fe6e6b1d72c1969f9602cd` |
-| MockAiZeApiUninstall.exe | `13ce99c8fbd94e65f87c944a4ae8c0d38baaa7471d56bebf58b3eb85eb9a3e4d` |
+| Configuração, SQLite e catálogo | Validação, snapshots, concorrência e fonte somente leitura |
+| Motor XML, Novo e Retorno | Fórmulas, namespaces, políticas, datas, composição e até 500 registros |
+| HTTP, autenticação e publicação | HTTP real, hashes, replay/conflito, limites e logs sanitizados |
+| Windows e manutenção | Serviço LocalService, ACLs, configuração, reparo, rollback e limpeza protegida |
+| Distribuição | Dois EXEs publicados; ícones, arquitetura, licenças e único runtime conferidos |
 
-O commit `325830b` corrigiu o erro de importação QtCore do pacote local: uma ICU
-de Poppler presente no PATH era coletada, mas não exporta as funções esperadas pelo
-Qt 6.12. O build agora limita os caminhos nativos e recusa fontes externas aos
-diretórios autorizados. Um diagnóstico sem elevação compilado com o mesmo entrypoint
-passou localmente com ambiente normal e isolado. O Actions executou os próprios
-EXEs de configuração, desinstalação e setup em modo diagnóstico: Qt, plugin Windows,
-ícone e renderização aprovados, sem entrar nos fluxos que alteram a instalação.
-O novo setup local foi compilado, mas a validação recebeu acesso negado novamente;
-nada foi preparado em release local. A questão do antivírus permanece separada.
+## Validação
 
-Quatro etapas da janela Qt foram renderizadas e conferidas. Revisões independentes corrigiram: idempotência ativa expirando, cache permanente de 429, cliente lento bloqueando parada, vazamento de fórmulas em erros, namespaces no misto, status de limites e rollback de configuração/origens/registro Windows. Nove diretórios temporários de testes interrompidos foram conferidos e removidos.
+A suíte atual possui 145 testes. A execução local ignora o caso que exige permissão de criação de symlink; há também teste determinístico de rejeição de reparse points. O Actions executa a suíte em Windows com Python 3.11 e 3.14 e verifica a instalação do wheel fora do checkout.
 
-## Bloqueio e liberação
+O smoke do serviço compilado verifica saúde, catálogo, autenticação, geração de 500 registros, Retorno separado/misto e hashes. Não registra serviço na máquina do usuário.
 
-A detecção também foi reportada para o EXE baixado do Actions. A [inspeção 39902707680](https://github.com/devphpaulo/MockAiZe-API/actions/runs/39902707680) confirmou o MD5 informado e o SHA-256 do build, os hashes dos executáveis internos e a ausência de assinatura Authenticode. Não há conclusão de falso positivo ou malware. A [análise detalhada](antivirus-analysis.md) explica a duplicação dos runtimes, a recomendação de instalador nativo com runtime compartilhado e as validações ainda necessárias. Essa migração ainda não foi implementada. A inspeção não executou os EXEs e o novo workflow publica somente relatórios JSON.
+O teste nativo roda exclusivamente em runner Windows descartável do GitHub e recusa serviço homônimo preexistente. Instala o produto real, gera XML como LocalService, altera porta e firewall pelo configurador, repara, desinstala e confirma a remoção do serviço e da regra de firewall. Confere dados preservados por padrão, limpeza explicitamente selecionada e SQLite de origem inalterado. O upload depende de todos os testes passarem.
 
-Kaspersky informou anteriormente HEUR:Trojan.Win32.Generic e excluiu MockAiZe-API-Setup.pkg durante o build. Na nova tentativa local solicitada, PyInstaller concluiu o setup, a validação recebeu acesso negado e depois o EXE deixou de existir. O build no runner do GitHub concluiu e publicou os dois EXEs. Isso não confirma malware nem falso positivo e não encerra a análise da detecção local. Nenhuma proteção foi desativada, exclusão criada ou amostra enviada a terceiros.
+A desinstalação confirma a remoção no SCM antes de perguntar sobre binários e pastas. Nenhuma limpeza é selecionada por padrão. Os destinos passam por conferência de allowlist, proteção do banco de origem e rejeição de links/junções. O fluxo termina com OK e informa reinício quando há binários em uso.
 
-Para liberar uma versão estável: concluir análise da detecção; homologar em VM boot sem login, ACLs LocalService, rede autorizada, falsa confirmação de pausa, rollback/reparo/remoção; validar modelos reais e equivalência funcional do motor. Licenças/hash/smoke do build atual foram conferidos no CI. Assinatura depende de certificado de distribuição. Estado atual: implementação em validação, não release estável concluída.
+## Limites de liberação
+
+Estado: `0.1.0.dev0`, em validação. O teste real no runner cobre o ciclo de vida acima, mas não comprova boot sem login em outra máquina, conectividade de outra estação, equivalência com todos os modelos reais ou aprovação pelo antivírus.
+
+A detecção Kaspersky reportada se refere às amostras antigas documentadas na [análise do antivírus](antivirus-analysis.md). A migração foi implementada e medida; não há parecer do fabricante sobre os novos EXEs. Nenhuma proteção foi desativada ou exclusão criada. Assinatura Authenticode depende de certificado de publicador. A migração não permite classificar a detecção antiga como falso positivo.
+
+## Build validado no Actions
+
+[Execução 40057766206](https://github.com/devphpaulo/MockAiZe-API/actions/runs/40057766206), commit `c5679de21d06bc16caefc39a4fe0af3147b9dbf5`: todos os jobs aprovados, incluindo os 145 testes em Python 3.11/3.14, smoke da API compilada e ciclo nativo completo. A execução local final teve 144 aprovados e um ignorado em 10,4 segundos.
+
+[Artefato com os dois EXEs](https://github.com/devphpaulo/MockAiZe-API/actions/runs/40057766206/artifacts/12546072062), disponível por 30 dias:
+
+| Arquivo | Bytes | SHA-256 |
+|---|---:|---|
+| MockAiZe-API-Setup.exe | 10.675.694 | `145eb44d5663cf09ee422f079b1c8c246f5fcb5ab47874b6cfe7a29b8366c22d` |
+| MockAiZeApiUninstall.exe | 2.156.292 | `ea0392abe662737499e110c4b2fe1ec219be8758ac6b369db98d5bc8eee917ea` |
+
+O teste da API compilada gerou 500 registros em aproximadamente 0,6 segundo numa fixture simples, além de Retorno separado e misto. O ciclo nativo confirmou geração como LocalService, mudança real de porta/firewall, reparo, serviço e regra removidos, dados preservados por padrão, limpeza explícita e fonte inalterada. A verificação de firewall consulta uma nova instância COM após cada alteração para evitar uma coleção antiga no próprio teste.

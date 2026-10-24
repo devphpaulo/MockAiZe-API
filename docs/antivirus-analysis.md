@@ -1,6 +1,6 @@
 # Detecção do instalador e tamanho dos executáveis
 
-Análise de 23/10/2026. Resultado: **detecção pendente de revisão pelo fabricante**.
+Análise histórica de 23/10/2026, atualizada em 24/10/2026. Resultado: **detecção pendente de revisão pelo fabricante**.
 Esta inspeção não confirma malware nem permite classificar a detecção como falso positivo.
 
 Atualização funcional: a falha de importação QtCore nos EXEs locais antigos foi
@@ -9,6 +9,12 @@ isola a compilação, verifica a origem das DLLs e acrescenta diagnóstico gráf
 dos EXEs ao CI. Isso corrige uma incompatibilidade de empacotamento, sem provar
 relação causal com a detecção do antivírus. Os hashes e tamanhos abaixo continuam
 identificando a amostra original reportada, não os executáveis recompilados.
+
+## Migração implementada em 24/10/2026
+
+Instalador, configurador e desinstalador agora usam Inno Setup nativo; Qt foi removido. Apenas o serviço mantém um runtime Python compartilhado. O setup local mede 10.627.232 bytes e o desinstalador 2.156.292 bytes. O build verifica composição e tamanho e o Actions testa o ciclo de vida real em runner descartável antes de publicar. Veja o [estado atual](implementation-status.md) e o [guia Windows](windows-installation.md).
+
+Os tamanhos, hashes e observações da análise original abaixo descrevem os antigos EXEs Qt. Não há veredito do Kaspersky para os novos EXEs. A mudança não comprova falso positivo nem garante ausência de novos alertas.
 
 ## Amostra e procedência
 
@@ -65,7 +71,7 @@ as dependências binárias e não valida o ambiente interno do Codex.
 
 ## Causa comprovada do tamanho
 
-Configurador, desinstalador e setup usam PyInstaller `onefile`, cada um com seu
+Na distribuição antiga, configurador, desinstalador e setup usavam PyInstaller `onefile`, cada um com seu
 próprio Python/Qt. O serviço possui outro runtime em `onedir`. O setup inclui os
 dois EXEs gráficos já comprimidos, além do serviço e de seu próprio runtime.
 
@@ -88,7 +94,7 @@ por causa da preparação das bibliotecas temporárias. Isso é um problema de d
 da distribuição que precisa ser corrigido independentemente da detecção. Não foi
 demonstrado que seja a causa específica da regra heurística do Kaspersky.
 
-## Alternativa recomendada
+## Alternativa recomendada na análise original
 
 Usar **Inno Setup para instalação/desinstalação nativas e um único runtime
 compartilhado em Program Files**. O configurador Qt e o serviço podem continuar
@@ -102,7 +108,7 @@ perguntar sobre os binários e as pastas, proteger o SQLite de origem e concluir
 com OK. Atualização, rollback e cancelamento precisam de testes após a migração.
 O suporte de build do Inno Setup já consta na
 [imagem oficial Windows do Actions](https://github.com/actions/runner-images/blob/main/images/windows/Windows2025-Readme.md).
-A migração ainda não foi implementada; não há medição de um novo instalador.
+Esta recomendação foi implementada em 24/10/2026, incluindo a substituição do configurador Qt por um frontend nativo. Os tamanhos atuais estão registrados acima.
 
 | Opção | Avaliação |
 |---|---|

@@ -1,126 +1,69 @@
 # Instalação no Windows
 
-Na [página do workflow Windows](https://github.com/devphpaulo/MockAiZe-API/actions/workflows/build.yml),
-abra uma execução concluída com sucesso e baixe o artefato **MockAiZe-API-Setup-Windows-x64**.
-Extraia o ZIP do Actions: ele contém `MockAiZe-API-Setup.exe` e `MockAiZeApiUninstall.exe`.
-O pacote inclui o runtime Python,
-serviço, configurador e desinstalador; não depende da instalação do aplicativo visual. Execute o
-setup e autorize a solicitação do Windows. A janela desktop preta e verde usa Qt
-Widgets locais, sem navegador ou servidor do assistente.
+A distribuição usa Inno Setup e uma única cópia do runtime do serviço. Não usa Qt, navegador ou instalação externa de Python. Baixe o artefato **MockAiZe-API-Setup-Windows-x64** de uma execução bem-sucedida do [workflow Windows](https://github.com/devphpaulo/MockAiZe-API/actions/workflows/build.yml) e extraia os dois EXEs do ZIP.
 
-Escolha o SQLite existente, as três pastas e a porta (padrão 6578). A API precisa
-do banco e de eventuais arquivos WAL/SHM disponíveis antes do login. Utilize discos
-locais; pastas de rede e OneDrive são recusadas pelo assistente. O banco é somente
-leitura: o instalador nunca cria nem migra o banco do estúdio.
+## Primeiro setup
 
-O padrão é `127.0.0.1`, sem regra de firewall. Ao habilitar rede, informe as origens
-confiáveis: `LocalSubnet` ou IPs/sub-redes separados por vírgula. A regra exclusiva
-`MockAiZe API HTTP` permite apenas o executável/porta do produto em perfis privado
-e domínio. A chave e os XMLs trafegam por HTTP sem criptografia.
+Abra `MockAiZe-API-Setup.exe` e autorize a solicitação padrão do Windows.
 
-Revise e instale. Os binários ficam em `Program Files\MockAiZe API`. Configuração,
-hash da chave e estado ficam na pasta de dados `Documentos\MockAíZé API`; caminhos
-absolutos independem do perfil da conta do serviço. O serviço `MockAiZeApi` usa
-`LocalService`, início automático e tentativas de recuperação. As ACLs concedem
-leitura na entrada/banco e escrita nas pastas operacionais; a pasta de dados é
-restrita a administradores, SYSTEM e LocalService. O sucesso exige HTTP 200 em
-`/health` na porta configurada. Guarde a chave mostrada uma única vez.
+1. Confira o estado do serviço. Na primeira instalação, ele estará ausente.
+2. Escolha uma pasta dedicada aos binários; o padrão é `Program Files\MockAiZe API`.
+3. Selecione o SQLite existente e o local do JSON de configuração.
+4. Escolha as pastas de entrada, saída e logs, a porta e o acesso local ou em rede.
+5. Revise e instale. O sucesso depende de o serviço iniciar e responder HTTP 200 em `/health`.
+6. Se uma chave foi criada, selecione seu campo na página final e copie com Ctrl+C. Ela é exibida somente nessa instalação; apenas o hash é salvo.
 
-Depois da confirmação é seguro apagar o setup baixado. Não apague os executáveis
-instalados. O atalho **MockAíZé API — Configurar** permite iniciar, parar, reiniciar,
-alterar configuração, abrir logs e desinstalar. Alterações param o serviço, validam
-a nova configuração e verificam a saúde após reiniciar; falhas restauram o JSON.
+O padrão é porta 6578, `127.0.0.1`, sem regra de firewall. A opção de rede usa `0.0.0.0`, HTTP sem criptografia e a regra exclusiva `MockAiZe API HTTP`, limitada ao executável, porta, perfis privado/domínio e às origens informadas (`LocalSubnet` ou IPs/sub-redes específicos).
 
-## Atualização e recuperação
+Use discos locais disponíveis antes do login. Rede/OneDrive são recusados. O banco do estúdio e seus arquivos WAL/SHM precisam estar disponíveis; não são criados nem migrados pelo instalador.
 
-Abra o novo setup. Ele detecta automaticamente instalação nova, atualização ou
-reparo. Na atualização, os campos existentes permanecem salvos. Pare o serviço e
-clique **Já pausei; verificar novamente**. O instalador consulta o SCM novamente
-antes de substituir arquivos; o clique sozinho não desbloqueia a atualização.
+O serviço `MockAiZeApi` usa LocalService e início automático. As ACLs permitem leitura na entrada e no banco e escrita nas pastas operacionais. Configuração e credencial ficam numa pasta de dados restrita; o padrão é `Documentos\MockAíZé API`. Os caminhos salvos são absolutos.
 
-O pacote é preparado num diretório temporário ao lado da instalação. Os binários
-antigos são renomeados para `.rollback` e restaurados se a troca ou saúde falhar.
-Configuração, credenciais, estado, XMLs e logs permanecem no diretório de dados.
-Se uma tentativa deixou `.rollback`/`.staging`, preserve essas cópias para
-diagnóstico antes de nova tentativa. Para reparar binários a partir do configurador,
-abra o setup da release desejada. O próprio configurador instalado não substitui o
-executável em que está rodando.
+Depois da confirmação, o setup baixado pode ser apagado. Os arquivos instalados incluem:
+
+| Arquivo | Uso |
+|---|---|
+| `MockAiZeApiService.exe` e `_internal/` | Serviço e sua única cópia do runtime |
+| `MockAiZeApiConfig.exe` | Configurador Inno nativo, sem Python/Qt próprios |
+| `MockAiZeApiUninstall.exe` | Desinstalador Inno nativo |
+| `installation.json` | Recibo para identificar a instalação após a remoção do serviço |
+| `licenses/` | Licenças e avisos dos componentes distribuídos |
+
+## Configuração, atualização e reparo
+
+O atalho **MockAíZé API — Configurar** permite iniciar, parar e reiniciar o serviço e alterar os campos de configuração. Pare o serviço pelo botão e aguarde a confirmação antes de continuar. Ao salvar, a API verifica os valores e sua saúde após reiniciar. Falhas restauram a configuração anterior.
+
+Para atualizar ou reparar binários, abra o novo setup. Ele lê a instalação e exige que o SCM confirme o serviço parado antes da troca. Configuração válida é preservada durante a atualização; use o configurador para alterá-la. Configuração ilegível pode ser substituída num reparo explícito, mantendo uma cópia de diagnóstico.
+
+O setup prepara o pacote numa pasta temporária privada. O componente de instalação copia os binários para uma pasta `.staging` ao lado do destino e mantém `.rollback` durante a troca. Falhas restauram os binários anteriores. Se uma tentativa deixou essas pastas, preserve-as para diagnóstico antes de repetir.
 
 ## Desinstalação
 
-Abra `MockAiZeApiUninstall.exe`, instalado em Program Files, ou use Desinstalar
-no Windows/configurador. O configurador abre esse executável separado e se fecha.
-O desinstalador usa o ícone do MockAíZé e solicita a elevação padrão do Windows.
+Use Desinstalar no Windows ou abra `MockAiZeApiUninstall.exe`. O EXE separado distribuído encontra a instalação registrada; a cópia instalada também reconhece seu recibo local quando o serviço já foi removido.
 
-1. Para o serviço e confirma sua parada.
-2. Remove o serviço, a regra própria do firewall e o cadastro do aplicativo.
-3. Espera o Windows confirmar que o serviço deixou de existir. Se continuar
-   marcado para exclusão por algum console aberto, informa o problema e não
-   inicia a limpeza nem mostra sucesso.
-4. Pergunta se deseja apagar os binários da pasta específica do produto em
-   Program Files. **Não** é o padrão.
-5. Pergunta quais pastas da API deseja limpar, mostrando os caminhos e avisando
-   que seu conteúdo será apagado. Pastas aninhadas aparecem como uma única
-   opção da pasta principal; pastas externas configuradas aparecem separadamente.
-6. Executa somente a limpeza escolhida, mostra **OK** e finaliza. Quando o
-   próprio executável estiver em uso, informa que a remoção será concluída no
-   próximo reinício; não afirma que os arquivos bloqueados já foram apagados.
+1. Confirme a remoção do serviço.
+2. O desinstalador para o serviço, remove o cadastro e a regra própria de firewall e espera sua ausência no SCM.
+3. Somente após essa confirmação, pergunta se deseja limpar os binários. **Não** é o padrão.
+4. Pergunta sobre cada pasta autorizada, mostrando os caminhos. Pastas aninhadas são agrupadas; a limpeza depende de cada escolha.
+5. Executa a limpeza selecionada, mostra **OK** e finaliza. Arquivos em uso são agendados para remoção no reinício e isso é informado.
 
-O SQLite de origem do estúdio e qualquer pasta que o contenha não são oferecidos
-para exclusão. Raízes do disco, pastas de sistema, perfil do usuário e destinos
-com links/junções são recusados. Se a configuração estiver ilegível, as pastas de
-dados são preservadas. Caso escolha manter os binários, o comprovante local
-`installation.json` permite reconhecer a instalação para limpeza posterior, mesmo
-após a remoção do serviço e de seu cadastro no Windows.
+O SQLite do estúdio e qualquer pasta que o contenha não são oferecidos para exclusão. Raízes, pastas de sistema, perfil do usuário e árvores com links/junções são protegidos. Configuração ilegível faz os dados serem preservados. Se escolher manter os binários, o recibo permite executar a limpeza depois.
 
-## Falha ao carregar QtCore
-
-O erro `DLL load failed while importing QtCore: Não foi possível encontrar o
-procedimento especificado` foi diagnosticado nos binários locais antigos. O build
-capturou `icuuc.dll` de uma ferramenta auxiliar Poppler presente no PATH do
-ambiente de desenvolvimento. O Qt 6.12 espera as funções ICU do Windows, como
-`ucnv_close`; a DLL capturada fornece nomes diferentes, como `ucnv_close_78`.
-
-A correção do commit `325830b` isola os caminhos de busca durante a compilação e
-rejeita bibliotecas nativas coletadas fora do projeto, do Python/ambiente virtual
-e do Windows. O diagnóstico compilado passou no mesmo computador com o ambiente
-normal e com os caminhos de desenvolvimento removidos; a ICU externa deixou de
-ser incluída. Os EXEs antigos precisam ser substituídos pelo novo build.
-
-O Actions também executa os três EXEs gráficos com `--diagnose-ui <relatorio.json>`
-antes do upload. Esse modo carrega QtCore/Gui/Widgets, o plugin nativo Windows e
-o ícone, renderiza uma janela de teste e termina com resultado JSON. Não entra no
-assistente e não registra, para ou remove serviços. A elevação do manifesto dos
-EXEs permanece necessária; no CI essa verificação roda no runner com elevação.
-Falha no carregamento ou na renderização impede a publicação do artefato.
-
-Essa correção funcional não resolve nem classifica a detecção do Kaspersky.
-Consulte a [análise do antivírus](antivirus-analysis.md) para essa investigação.
-
-## Construir a distribuição
-
-Em um Windows com Python e dependências de desenvolvimento instaladas:
+## Construir e verificar
 
 ```powershell
-python -m pip install -e '.[packaging,windows]'
-./packaging/build.ps1
+python -m pip install -e '.[windows,packaging]'
+.\packaging\build.ps1
+# Compilador em outro local:
+.\packaging\build.ps1 -InnoCompiler 'C:\ferramentas\Inno Setup 6\ISCC.exe'
 ```
 
-Os arquivos de entrega são `release\MockAiZe-API-Setup.exe` e
-`release\MockAiZeApiUninstall.exe`. O primeiro também instala uma cópia do segundo
-em Program Files. O SHA-256 aparece no resultado do build. As quatro especificações
-PyInstaller produzem serviço sem janela, configurador, desinstalador e setup completo.
-Todos os executáveis usam o ícone fornecido do MockAíZé, convertido em ICO com
-tamanhos de 16 a 256 pixels. O PNG/ICO é mantido neste próprio repositório; o
-build não depende de acessar o diretório do estúdio.
-O Actions repete o build em pushes, pull requests ou acionamento manual. Antes de
-publicar os dois EXEs, valida os quatro binários internos (Windows x64, ícones e
-elevação), origem das bibliotecas, runtime e licenças, e executa saúde, catálogo e
-geração XML no serviço compilado. Também testa o carregamento do Qt e a renderização
-nos três EXEs gráficos. Os hashes ficam no resumo da execução; o artefato é mantido por 30 dias.
-Nenhum arquivo de planejamento nem checkout do estúdio entra no pacote.
-`python -m mockaize_api.setup_ui --preview` permite verificar a interface sem
-instalar serviço ou alterar firewall. Testes unitários não realizam operações
-privilegiadas. Instalação, reinício do Windows, conta LocalService e firewall devem
-ser homologados em VM Windows antes de distribuição; compilar não comprova esses
-comportamentos. Assinatura Authenticode requer certificado de distribuição próprio.
+O script compila somente o serviço Python em modo diretório e os três frontends nativos Inno. Os ícones vêm do ICO versionado. O produto distribui as cinco rotas funcionais e `/health`; o runtime não depende do checkout ou dos scripts do estúdio.
+
+O build recusa Qt/Pythonwin e OpenSSL opcional, runtimes duplicados, credenciais, bancos e planejamento no payload. SHA-256 e bytes dos EXEs aparecem no log e no resumo do Actions. O bootstrap Inno é x86 e instala somente em Windows x64 compatível; o serviço e seu runtime são x64. O Inno solicita elevação conforme `PrivilegesRequired=admin`.
+
+`packaging/smoke.py` testa o serviço compilado sem registrá-lo. `packaging/smoke_native.py` testa instalação real, configuração, reparo, remoção e limpeza optativa; recusa executar fora do runner Windows descartável do GitHub ou quando já existe serviço homônimo.
+
+O modo silencioso exige `/REQUEST=<INI UTF-16>` com os campos da seção `setup` do protocolo em `maintenance.py`. A criação inicial da chave exige a interface; automação silenciosa usa credenciais pré-provisionadas. Não exponha credenciais em linha de comando ou logs.
+
+O teste do Actions não substitui reiniciar uma VM sem login nem a análise antimalware da distribuição. Assinatura Authenticode requer certificado de publicador próprio.
