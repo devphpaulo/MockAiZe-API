@@ -96,13 +96,24 @@ def main():
             assert (target / 'MockAiZeApiConfig.exe').is_file()
             assert (target / 'MockAiZeApiUninstall.exe').is_file()
             bridge('stop')
+            with socket.socket() as listener:
+                listener.bind(('127.0.0.1', 0))
+                port = listener.getsockname()[1]
+            values.update(port=port, host='0.0.0.0', firewallAccess='Y', origins='127.0.0.1/32')
             native(target / 'MockAiZeApiConfig.exe', 'configure')
             health_and_catalog()
+            from mockaize_api.config import load_config
+            saved = load_config(config_path)
+            assert saved.port == port and saved.firewall_access == 'Y'
+            import win32com.client
+            rules = win32com.client.Dispatch('HNetCfg.FwPolicy2').Rules
+            assert any(rule.Name == 'MockAiZe API HTTP' for rule in rules)
             bridge('stop')
             native(setup, 'repair')
             health_and_catalog()
             native(repo / 'release/MockAiZeApiUninstall.exe', 'uninstall')
             assert WindowsDriver().status() == 'absent'
+            assert not any(rule.Name == 'MockAiZe API HTTP' for rule in rules)
             assert config_path.exists(), 'O padrão da limpeza deve preservar os dados.'
             assert (target / 'MockAiZeApiService.exe').exists()
             reply = bridge('cleanup', {'cleanBinaries': '1', 'folderCount': '1', 'folder0': str(data)})
@@ -110,7 +121,8 @@ def main():
             assert not target.exists() and not data.exists()
             assert hashlib.sha256(source.read_bytes()).hexdigest() == source_hash
             print(json.dumps({'nativeLifecycle': 'passed', 'install': True, 'configure': True,
-                              'repair': True, 'serviceRemoved': True, 'dataPreservedByDefault': True,
+                              'portAndFirewallChanged': True, 'repair': True,
+                              'serviceRemoved': True, 'dataPreservedByDefault': True,
                               'optInCleanup': True, 'sourceUnchanged': True}))
         finally:
             # Never touch a pre-existing or unrelated service. This target was
