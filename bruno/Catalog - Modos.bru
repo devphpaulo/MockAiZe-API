@@ -1,0 +1,20 @@
+meta {
+  name: Catalog - Modos
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/files/{{fileId}}/modes
+  body: none
+  auth: none
+}
+
+headers {
+  X-API-Key: {{apiKey}}
+  Accept: application/json
+}
+
+docs {
+  Mostra se os modos de geração de novos registros e de retorno estão prontos para a variação selecionada. Configure fileId no ambiente local.
+}

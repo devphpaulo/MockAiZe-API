@@ -1,0 +1,9 @@
+{
+  "version": "1",
+  "name": "MockAiZe API",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    "dist"
+  ]
+}

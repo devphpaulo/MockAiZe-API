@@ -1,0 +1,28 @@
+meta {
+  name: Gerar - Novos registros
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/new
+  body: json
+  auth: none
+}
+
+headers {
+  X-API-Key: {{apiKey}}
+  Accept: application/json
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "fileId": "{{fileId}}",
+    "recordCount": 100
+  }
+}
+
+docs {
+  Gera 3 registros para a variação configurada e salva o resultado no diretório de saída definido na instalação. Ajuste recordCount (1 a 500) conforme necessário.
+}

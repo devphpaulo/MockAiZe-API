@@ -1,0 +1,20 @@
+meta {
+  name: Catalog - Arquivos
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/files?q=&limit=100
+  body: none
+  auth: none
+}
+
+headers {
+  X-API-Key: {{apiKey}}
+  Accept: application/json
+}
+
+docs {
+  Lista as variações disponíveis no banco da biblioteca. Parâmetros opcionais: q para filtrar por nome, limit de 1 a 200 e cursor para paginação.
+}

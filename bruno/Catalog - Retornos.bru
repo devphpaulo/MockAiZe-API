@@ -1,0 +1,20 @@
+meta {
+  name: Catalog - Retornos
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v1/files/{{fileId}}/returns
+  body: none
+  auth: none
+}
+
+headers {
+  X-API-Key: {{apiKey}}
+  Accept: application/json
+}
+
+docs {
+  Lista os modelos de retorno e indica quais estão prontos. Configure fileId no ambiente local.
+}

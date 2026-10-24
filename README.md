@@ -20,6 +20,10 @@ Estado: `0.1.0.dev0`, em validação. O setup cria as pastas de trabalho ausente
 
 As pastas de banco, entrada, saída, logs e configuração também podem usar compartilhamentos de rede. Informe o caminho UNC completo, por exemplo `\\servidor\compartilhamento\MockAiZe`; letras mapeadas não ficam disponíveis para serviços Windows. O serviço acessa SMB como a conta do computador (`DOMÍNIO\NOME-DO-PC$`), então ela precisa de permissões de leitura/escrita no compartilhamento e no NTFS. Compartilhamentos NAS que exigem credenciais próprias ainda não são compatíveis. Os binários continuam instalados localmente em Program Files.
 
+## Usar no Bruno
+
+Importe a pasta [`bruno/`](bruno/) como collection e selecione o ambiente `local`. O guia explica onde configurar a chave da API e o identificador da variação.
+
 ## Download e build
 
 [Baixar o setup corrigido](https://github.com/devphpaulo/MockAiZe-API/actions/runs/40059677643/artifacts/12547241307): setup de 10.709.295 bytes e desinstalador de 2.156.324 bytes. [Actions aprovado](https://github.com/devphpaulo/MockAiZe-API/actions/runs/40059677643), commit `f0bff9c`.

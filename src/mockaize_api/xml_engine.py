@@ -14,6 +14,7 @@ from .formulas import check_length, evaluate, filename
 INPUT_LIMIT = 2_000_000
 OUTPUT_LIMIT = 100_000_000
 XMLNS = 'http://www.w3.org/2000/xmlns/'
+XML_SPACE = 'http://www.w3.org/XML/1998/namespace'
 
 
 def parse(xml, code='INPUT_XML_INVALID', limit=INPUT_LIMIT):
@@ -140,9 +141,46 @@ def all_nodes(doc):
     return result
 
 
+def _serialize_node(node, depth=0, preserve_space=False):
+    if node.nodeType != Node.ELEMENT_NODE:
+        return node.toxml()
+
+    space = node.getAttributeNS(XML_SPACE, 'space')
+    if space == 'preserve':
+        preserve_space = True
+    elif space == 'default':
+        preserve_space = False
+
+    if preserve_space:
+        return node.toxml()
+
+    element_children = [child for child in node.childNodes if child.nodeType == Node.ELEMENT_NODE]
+    has_text_content = any(
+        child.nodeType == Node.CDATA_SECTION_NODE
+        or child.nodeType == Node.TEXT_NODE and child.data.strip()
+        for child in node.childNodes
+    )
+    if not element_children or has_text_content:
+        return node.toxml()
+
+    attributes_text = ''.join(f' {attribute.toxml()}' for attribute in node.attributes.values())
+    opening_tag = f'<{node.tagName}{attributes_text}>'
+    content = [
+        child for child in node.childNodes
+        if child.nodeType != Node.TEXT_NODE or child.data.strip()
+    ]
+    lines = [
+        '  ' * (depth + 1) + _serialize_node(child, depth + 1, preserve_space)
+        for child in content
+    ]
+    closing_tag = '  ' * depth + f'</{node.tagName}>'
+    return opening_tag + '\n' + '\n'.join(lines) + '\n' + closing_tag
+
+
 def serialize(doc):
-    # Preserve mixed content, CDATA and xml:space. Whitespace is semantically retained.
-    body='\n'.join(n.toxml() for n in doc.childNodes if n.nodeType!=Node.TEXT_NODE or n.data.strip())
+    # Normalize indentation-only text between elements while retaining mixed content,
+    # CDATA and subtrees marked with xml:space="preserve".
+    body='\n'.join(_serialize_node(n) for n in doc.childNodes if n.nodeType!=Node.TEXT_NODE or n.data.strip())
     content=('<?xml version="1.0" encoding="UTF-8"?>\n'+body+'\n').encode('utf-8')
     if len(content)>OUTPUT_LIMIT:raise ApiError(413,'OUTPUT_LIMIT_EXCEEDED','Saída excede 100 MB.')
     # Generated literals may contain XML-invalid control characters.
