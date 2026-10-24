@@ -93,6 +93,15 @@ def verify_build(root, icon):
                        'sha256': digest})
     validate_payload(['payload/' + str(path.relative_to(root / 'build/payload')).replace('\\', '/')
                       for path in (root / 'build/payload').rglob('*') if path.is_file()])
+    swagger = root / 'build/payload/_internal/mockaize_api/assets/swagger'
+    source = root / 'src/mockaize_api/assets/swagger'
+    for name in ('index.html', 'initializer.js', 'openapi.json', 'swagger-ui-bundle.js', 'swagger-ui.css'):
+        if not (swagger / name).is_file() or (swagger / name).read_bytes() != (source / name).read_bytes():
+            raise ValueError(f'Documentação Swagger ausente ou divergente no pacote: {name}.')
+    upstream = json.loads((source / 'UPSTREAM.json').read_text(encoding='utf-8'))
+    for name, expected in upstream['files'].items():
+        if hashlib.sha256((swagger / name).read_bytes()).hexdigest() != expected['sha256']:
+            raise ValueError(f'Recurso Swagger divergente da versão oficial: {name}.')
     if 'PrivilegesRequired=admin' not in (root / 'packaging/inno/common.iss').read_text(encoding='utf-8'):
         raise ValueError('Os frontends Inno devem solicitar elevação antes das operações de manutenção.')
     return result

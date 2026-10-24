@@ -345,7 +345,7 @@ class WindowsDriver:
         key_path = r'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\MockAiZeApi'
         with winreg.CreateKey(winreg.HKEY_LOCAL_MACHINE, key_path) as key:
             for name, value in [('DisplayName', 'MockAíZé API'),
-                                ('DisplayVersion', '0.1.0'),
+                                ('DisplayVersion', '0.2.0'),
                                 ('InstallLocation', str(installation.directory)),
                                 ('DisplayIcon', f'"{exe}",0'),
                                 ('UninstallString', f'"{installation.directory / UNINSTALL_EXE}"')]:

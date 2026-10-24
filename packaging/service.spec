@@ -2,6 +2,8 @@
 from pathlib import Path
 root = Path(SPECPATH).parent
 a = Analysis([str(root / 'packaging' / 'service_entry.py')], pathex=[str(root / 'src')],
+             datas=[(str(root / 'src/mockaize_api/assets/swagger'), 'mockaize_api/assets/swagger'),
+                    (str(root / 'src/mockaize_api/assets/mockaize.ico'), 'mockaize_api/assets')],
              hiddenimports=['win32timezone', 'servicemanager', 'win32serviceutil',
                             'win32service', 'win32event', 'pywintypes',
                             'mockaize_api.runtime', 'mockaize_api.xml_engine',

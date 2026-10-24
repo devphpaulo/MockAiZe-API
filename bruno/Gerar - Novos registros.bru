@@ -1,11 +1,11 @@
 meta {
   name: Gerar - Novos registros
   type: http
-  seq: 5
+  seq: 6
 }
 
 post {
-  url: {{baseUrl}}/api/v1/new
+  url: {{baseUrl}}/api/v1/files/xml/{{fileId}}/new
   body: json
   auth: none
 }
@@ -18,11 +18,11 @@ headers {
 
 body:json {
   {
-    "fileId": "{{fileId}}",
-    "recordCount": 100
+    "recordCount": 100,
+    "delivery": "directory"
   }
 }
 
 docs {
-  Gera 3 registros para a variação configurada e salva o resultado no diretório de saída definido na instalação. Ajuste recordCount (1 a 500) conforme necessário.
+  Gera 100 registros para a variação da URL e salva o XML no diretório Saídas do servidor. Ajuste recordCount (1 a 500). Use delivery content para receber files[].content no JSON sem gravar, ou inline para receber o XML diretamente.
 }

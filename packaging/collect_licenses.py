@@ -29,6 +29,11 @@ def collect(destination: Path, inno_license: Path | None = None) -> None:
     notices = Path(__file__).resolve().parent.parent / 'THIRD_PARTY_NOTICES.md'
     if notices.is_file():
         shutil.copy2(notices, destination / notices.name)
+    swagger_source = notices.parent / 'src/mockaize_api/assets/swagger'
+    swagger_target = destination / 'swagger-ui'
+    swagger_target.mkdir(exist_ok=True)
+    for name in ('LICENSE', 'swagger-ui-bundle.js.LICENSE.txt', 'UPSTREAM.json'):
+        shutil.copy2(swagger_source / name, swagger_target / name)
     if inno_license:
         shutil.copy2(inno_license, destination / 'Inno-Setup-LICENSE.txt')
 

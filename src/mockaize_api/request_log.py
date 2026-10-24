@@ -19,6 +19,11 @@ class RequestLog:
                    'sourceRevision', 'composition', 'files', 'residue'}
         now = datetime.now().astimezone()
         entry = {key: value for key, value in values.items() if key in allowed}
+        if 'files' in entry:
+            file_fields = {'fileName', 'records', 'sha256', 'sizeBytes', 'sizeDisplay',
+                           'returnId', 'returnName', 'collisionRenamed'}
+            entry['files'] = [{key: value for key, value in item.items() if key in file_fields}
+                              for item in entry['files']]
         entry['timestamp'] = now.isoformat()
         try:
             with self.lock:

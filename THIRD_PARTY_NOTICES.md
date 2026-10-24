@@ -15,6 +15,12 @@ Este documento não escolhe uma licença para o código próprio do projeto.
 - tzdata: https://github.com/python/tzdata
 - PyInstaller e exceção para distribuição: https://pyinstaller.org/en/stable/license.html
 - Inno Setup: https://jrsoftware.org/isinfo.php
+- Swagger UI 5.33.1 (Apache-2.0): https://github.com/swagger-api/swagger-ui/releases/tag/v5.33.1
+
+A interface Swagger usa JavaScript e CSS oficiais versionados localmente, sem CDN.
+As fontes e hashes estão em `assets/swagger/UPSTREAM.json` no pacote Python;
+os avisos originais do bundle e a licença estão também em `licenses/swagger-ui/`
+na instalação Windows.
 
 As versões efetivas ficam nos metadados e nos logs do build. O serviço usa HTTP
 e os algoritmos de hash nativos do Python; não distribui o backend TLS opcional/

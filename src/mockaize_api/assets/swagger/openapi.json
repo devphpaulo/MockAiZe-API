@@ -1,0 +1,1372 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "MockAíZé API",
+    "version": "0.2.0.dev0",
+    "description": "Catálogo e geração de arquivos do MockAíZé. Atualmente o formato implementado é **XML**; por isso as operações ficam em `/api/v1/files/xml`. CSV, JSON e CNAB ainda não estão disponíveis.\n\n**Comece aqui:** use **Authorize** para informar a chave X-API-Key exibida na configuração, consulte o catálogo e copie o ID de uma variação. Depois consulte os modos e modelos de retorno para conferir se estão prontos. Informe esse ID no parâmetro **fileId da URL**, nunca no corpo.\n\n### Entrada e regras do retorno\nVocê pode enviar seu próprio XML no campo **inputXml do body JSON**, mantendo a estrutura da entrada configurada no MockAíZé. Os valores e a quantidade de registros podem mudar. As regras de cópia e os cálculos de entrada usam esse XML; regras de valor fixo, sequência e geração continuam sendo aplicadas conforme a configuração salva. Se **inputXml** e **inputFilePath** forem omitidos, usa o XML de exemplo salvo no banco. A API não modifica o modelo ou a configuração original.\n\n### Três escolhas independentes\n| Campo | O que controla | Opções |\n|---|---|---|\n| inputRecords | Quais registros da entrada participarão do retorno | all (padrão): todos; first: somente o primeiro grupo configurado |\n| returnSelection | Quais modelos de retorno serão executados | type=all: todos os modelos; type=ids: os IDs selecionados |\n| composition | Como juntar os resultados dos modelos | apart (padrão): um XML por modelo; mixed: um XML com registros intercalados, se os modelos forem compatíveis |\n\n**Exemplo funcional:** uma entrada com 10 registros e 2 modelos selecionados gera 2 XMLs de 10 registros em apart, ou 1 XML de 20 registros em mixed. Com inputRecords=first, gera 2 XMLs de 1 registro em apart, ou 1 XML de 2 registros em mixed. O documento de entrada inteiro é validado antes de escolher o primeiro registro.\n\n### Onde receber o resultado\n| delivery | Resultado | Grava em Saídas? |\n|---|---|---|\n| directory (padrão) | JSON com files, nomes, contagens, hashes e tamanhos | Sim |\n| content | JSON com os mesmos metadados e **files[].content**, contendo o XML completo de cada resultado | Não |\n| inline | XML diretamente no corpo HTTP, com nome no cabeçalho Content-Disposition | Não; exige exatamente um XML final |\n\nA entrega **content** aceita vários modelos separados na mesma resposta. Para reutilizar o XML, leia `files[n].content` como string JSON; as aspas e quebras escapadas pertencem ao transporte JSON. Todos os caminhos de diretório são do **servidor**, não do computador cliente.\n\n**Limites:** novos registros de 1 a 500; XML de entrada até 2 MB em UTF-8; até 20 modelos selecionados; saída total até 100 MB. Em delivery=content, o JSON completo também deve caber em 100 MB; reduza a geração ou use directory se exceder. Modelos e XMLs incompatíveis geram erro 422 com Problem Details.\n\nA documentação e seus recursos são instalados localmente e funcionam sem internet. A interface não persiste a chave de API ao recarregar."
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Serviço"
+    },
+    {
+      "name": "Catálogo XML"
+    },
+    {
+      "name": "Geração XML"
+    }
+  ],
+  "security": [
+    {
+      "ApiKey": []
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "Serviço"
+        ],
+        "operationId": "health",
+        "summary": "Verificar saúde do serviço",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Serviço e dependências disponíveis.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Serviço ou dependência indisponível.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/files/xml": {
+      "get": {
+        "tags": [
+          "Catálogo XML"
+        ],
+        "operationId": "listXmlFiles",
+        "summary": "Consultar catálogo XML",
+        "description": "Retorna somente as variações visíveis da biblioteca XML. A seleção do formato é feita no caminho /files/xml; filtros e paginação usam a query.",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Filtrar por trecho do nome, sem diferenciar maiúsculas e minúsculas.",
+            "schema": {
+              "type": "string",
+              "maxLength": 512,
+              "default": ""
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Use nextCursor da resposta anterior com o mesmo q. Omita na primeira página.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Consulta concluída.",
+            "headers": {
+              "X-Request-ID": {
+                "description": "Identificador da requisição para consulta dos logs.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FilePage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/files/xml/{fileId}": {
+      "get": {
+        "tags": [
+          "Catálogo XML"
+        ],
+        "operationId": "getXmlFile",
+        "summary": "Consultar arquivo XML por ID",
+        "description": "Retorna metadados da variação, sem expor o modelo XML ou sua configuração interna.",
+        "parameters": [
+          {
+            "name": "fileId",
+            "in": "path",
+            "required": true,
+            "description": "ID retornado pela consulta do catálogo XML.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            },
+            "example": "file-1"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Consulta concluída.",
+            "headers": {
+              "X-Request-ID": {
+                "description": "Identificador da requisição para consulta dos logs.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/File"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/files/xml/{fileId}/modes": {
+      "get": {
+        "tags": [
+          "Catálogo XML"
+        ],
+        "operationId": "getXmlModes",
+        "summary": "Consultar modos disponíveis",
+        "description": "Verifique ready e missingRequirements antes de gerar novos registros ou retornos.",
+        "parameters": [
+          {
+            "name": "fileId",
+            "in": "path",
+            "required": true,
+            "description": "ID retornado pela consulta do catálogo XML.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            },
+            "example": "file-1"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Consulta concluída.",
+            "headers": {
+              "X-Request-ID": {
+                "description": "Identificador da requisição para consulta dos logs.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Modes"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/files/xml/{fileId}/returns": {
+      "get": {
+        "tags": [
+          "Catálogo XML"
+        ],
+        "operationId": "getXmlReturns",
+        "summary": "Consultar modelos de retorno",
+        "description": "Os IDs retornados podem ser usados em returnSelection.ids. Todos os modelos selecionados, inclusive em type=all, precisam estar prontos.",
+        "parameters": [
+          {
+            "name": "fileId",
+            "in": "path",
+            "required": true,
+            "description": "ID retornado pela consulta do catálogo XML.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            },
+            "example": "file-1"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Consulta concluída.",
+            "headers": {
+              "X-Request-ID": {
+                "description": "Identificador da requisição para consulta dos logs.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Returns"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/files/xml/{fileId}/new": {
+      "post": {
+        "tags": [
+          "Geração XML"
+        ],
+        "operationId": "generateNewXml",
+        "summary": "Gerar novos registros XML",
+        "description": "Gera de 1 a 500 registros conforme as regras da variação XML salva. Informe fileId somente na URL. Escolha delivery=directory para gravar em Saídas, content para obter files[].content em JSON ou inline para receber XML diretamente. Não aceita inputXml nem inputRecords: esses campos pertencem ao modo de retorno.",
+        "parameters": [
+          {
+            "name": "fileId",
+            "in": "path",
+            "required": true,
+            "description": "ID retornado pela consulta do catálogo XML.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            },
+            "example": "file-1"
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Opcional. Repetir a mesma operação com a mesma chave e corpo reaproveita a resposta. Outra solicitação com a mesma chave gera 409. Use uma chave nova para cada geração lógica.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[!-~]+$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewXmlRequest"
+              },
+              "examples": {
+                "pasta": {
+                  "summary": "Gravar 100 novos registros em Saídas",
+                  "value": {
+                    "recordCount": 100,
+                    "delivery": "directory"
+                  }
+                },
+                "conteudo": {
+                  "summary": "Receber 100 novos registros como XML dentro do JSON",
+                  "value": {
+                    "recordCount": 100,
+                    "delivery": "content"
+                  }
+                },
+                "xml_direto": {
+                  "summary": "Receber o XML diretamente no corpo HTTP",
+                  "value": {
+                    "recordCount": 100,
+                    "delivery": "inline"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Geração concluída. O campo delivery, e não o cabeçalho Accept, define JSON em diretório ou XML inline.",
+            "headers": {
+              "X-Request-ID": {
+                "description": "Identificador da requisição para consulta dos logs.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Idempotent-Replay": {
+                "description": "true quando a resposta foi reaproveitada por idempotência.",
+                "schema": {
+                  "type": "boolean"
+                }
+              },
+              "Content-Disposition": {
+                "description": "Nome sugerido para download na entrega inline.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Mockaize-SHA256": {
+                "description": "SHA-256 do XML inline.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Mockaize-Size-Bytes": {
+                "description": "Tamanho em bytes do XML inline.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Mockaize-Size-Display": {
+                "description": "Tamanho legível do XML inline.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationResult"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Document>\n  <Record><Value>exemplo</Value></Record>\n</Document>"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/files/xml/{fileId}/return": {
+      "post": {
+        "tags": [
+          "Geração XML"
+        ],
+        "operationId": "generateReturnXml",
+        "summary": "Gerar retorno XML",
+        "description": "Gera retornos com as regras salvas, usando o XML do body (inputXml), um arquivo de Entradas (inputFilePath), ou o modelo salvo quando nenhuma entrada for enviada. inputRecords seleciona registros de entrada; returnSelection seleciona modelos. As regras de cópia/cálculo usam os valores dessa entrada; os demais geradores configurados continuam funcionando. Com delivery=content, cada item de files contém fileName e content com o XML completo, sem leitura de arquivos no cliente. Todos os modelos selecionados precisam estar prontos. inputXml e inputFilePath são mutuamente exclusivos; inputRecords=first também exige que todo o XML seja estruturalmente válido.",
+        "parameters": [
+          {
+            "name": "fileId",
+            "in": "path",
+            "required": true,
+            "description": "ID retornado pela consulta do catálogo XML.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            },
+            "example": "file-1"
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Opcional. Repetir a mesma operação com a mesma chave e corpo reaproveita a resposta. Outra solicitação com a mesma chave gera 409. Use uma chave nova para cada geração lógica.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[!-~]+$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReturnXmlRequest"
+              },
+              "examples": {
+                "modelo_salvo": {
+                  "summary": "Usar todos os registros do modelo salvo e gravar XMLs em Saídas",
+                  "value": {
+                    "returnSelection": {
+                      "type": "all"
+                    },
+                    "inputRecords": "all",
+                    "composition": "apart",
+                    "delivery": "directory"
+                  }
+                },
+                "xml_enviado_todos": {
+                  "summary": "Enviar XML próprio e receber todos os retornos em JSON",
+                  "description": "XML ilustrativo; substitua por um XML compatível com sua configuração.",
+                  "value": {
+                    "inputXml": "<Document><Record><Value>valor-do-cliente-1</Value></Record><Record><Value>valor-do-cliente-2</Value></Record></Document>",
+                    "inputRecords": "all",
+                    "returnSelection": {
+                      "type": "all"
+                    },
+                    "composition": "apart",
+                    "delivery": "content"
+                  }
+                },
+                "xml_enviado_primeiro": {
+                  "summary": "Enviar XML próprio e usar somente seu primeiro registro",
+                  "description": "Retorna um documento de um registro por modelo, dentro de files[].content. Substitua o XML ilustrativo.",
+                  "value": {
+                    "inputXml": "<Document><Record><Value>valor-do-cliente-1</Value></Record><Record><Value>valor-do-cliente-2</Value></Record></Document>",
+                    "inputRecords": "first",
+                    "returnSelection": {
+                      "type": "all"
+                    },
+                    "composition": "apart",
+                    "delivery": "content"
+                  }
+                },
+                "xml_misto": {
+                  "summary": "Todos os registros, modelos intercalados em um XML",
+                  "value": {
+                    "inputXml": "<Document><Record><Value>valor-do-cliente-1</Value></Record><Record><Value>valor-do-cliente-2</Value></Record></Document>",
+                    "inputRecords": "all",
+                    "returnSelection": {
+                      "type": "all"
+                    },
+                    "composition": "mixed",
+                    "delivery": "content"
+                  }
+                },
+                "modelo_especifico": {
+                  "summary": "Escolher um modelo e receber o XML diretamente",
+                  "description": "Substitua modelo-retorno-id por um ID retornado na consulta de modelos.",
+                  "value": {
+                    "returnSelection": {
+                      "type": "ids",
+                      "ids": [
+                        "modelo-retorno-id"
+                      ]
+                    },
+                    "inputRecords": "all",
+                    "composition": "apart",
+                    "delivery": "inline"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Geração concluída. O campo delivery, e não o cabeçalho Accept, define JSON em diretório ou XML inline.",
+            "headers": {
+              "X-Request-ID": {
+                "description": "Identificador da requisição para consulta dos logs.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Idempotent-Replay": {
+                "description": "true quando a resposta foi reaproveitada por idempotência.",
+                "schema": {
+                  "type": "boolean"
+                }
+              },
+              "Content-Disposition": {
+                "description": "Nome sugerido para download na entrega inline.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Mockaize-SHA256": {
+                "description": "SHA-256 do XML inline.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Mockaize-Size-Bytes": {
+                "description": "Tamanho em bytes do XML inline.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Mockaize-Size-Display": {
+                "description": "Tamanho legível do XML inline.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationResult"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Document>\n  <Record><Value>exemplo</Value></Record>\n</Document>"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "ApiKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key",
+        "description": "Chave exibida ao criar a configuração da API. Nenhuma chave real é incluída nesta documentação."
+      }
+    },
+    "schemas": {
+      "Health": {
+        "type": "object",
+        "required": [
+          "status",
+          "version"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "unavailable"
+            ]
+          },
+          "version": {
+            "type": "string"
+          }
+        }
+      },
+      "File": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "libraryPath",
+          "revision"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "file-1"
+          },
+          "name": {
+            "type": "string",
+            "example": "AMCB001"
+          },
+          "libraryPath": {
+            "type": "string",
+            "description": "Caminho lógico dentro da biblioteca do MockAíZé; não é um caminho de disco.",
+            "example": "Financeiro / AMCB001"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1,
+            "example": 1
+          }
+        }
+      },
+      "FilePage": {
+        "type": "object",
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/File"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "Cursor da próxima página, ou null ao terminar. Repita o mesmo filtro q ao paginar."
+          }
+        }
+      },
+      "Modes": {
+        "type": "object",
+        "required": [
+          "fileId",
+          "fileName",
+          "items"
+        ],
+        "properties": {
+          "fileId": {
+            "type": "string"
+          },
+          "fileName": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "name",
+                "ready",
+                "missingRequirements"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "enum": [
+                    "new",
+                    "return"
+                  ]
+                },
+                "name": {
+                  "type": "string"
+                },
+                "ready": {
+                  "type": "boolean"
+                },
+                "missingRequirements": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "Returns": {
+        "type": "object",
+        "required": [
+          "fileId",
+          "fileName",
+          "items"
+        ],
+        "properties": {
+          "fileId": {
+            "type": "string"
+          },
+          "fileName": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "name",
+                "ready"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "ready": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        }
+      },
+      "NewXmlRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "recordCount"
+        ],
+        "properties": {
+          "recordCount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500,
+            "example": 100
+          },
+          "delivery": {
+            "type": "string",
+            "enum": [
+              "directory",
+              "content",
+              "inline"
+            ],
+            "default": "directory",
+            "description": "directory (padrão): grava os XMLs em Saídas e retorna metadados JSON. content: retorna JSON com files[].content e fileName, sem gravar. inline: retorna o XML bruto e exige exatamente um XML final."
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Opcional. Falha com 409 se a revisão salva da variação mudou."
+          }
+        }
+      },
+      "ReturnSelection": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "all"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "ids"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "ids"
+                ]
+              },
+              "ids": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 20,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                }
+              }
+            }
+          }
+        ],
+        "description": "Seleciona modelos de retorno, não registros de entrada. Use inputRecords para escolher todos os registros ou apenas o primeiro."
+      },
+      "ReturnXmlRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "returnSelection"
+        ],
+        "not": {
+          "required": [
+            "inputXml",
+            "inputFilePath"
+          ]
+        },
+        "properties": {
+          "returnSelection": {
+            "$ref": "#/components/schemas/ReturnSelection"
+          },
+          "composition": {
+            "type": "string",
+            "enum": [
+              "apart",
+              "mixed"
+            ],
+            "default": "apart",
+            "description": "apart gera um XML por modelo selecionado; mixed intercala os registros num XML quando os modelos são compatíveis."
+          },
+          "inputXml": {
+            "type": "string",
+            "minLength": 1,
+            "description": "XML completo enviado pelo cliente no corpo JSON, até 2 MB em UTF-8. A estrutura deve ser compatível com a entrada configurada; valores e quantidade de registros podem mudar. As regras salvas de cópia e cálculo de entrada passam a usar estes valores. Não combinar com inputFilePath. Se ambas as entradas forem omitidas, usa o XML de exemplo salvo no banco."
+          },
+          "inputFilePath": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Caminho absoluto de um XML contido no diretório Entradas configurado no servidor. O arquivo deve existir e ser acessível pelo serviço. Não é um upload nem um caminho do computador cliente. Não combinar com inputXml."
+          },
+          "delivery": {
+            "type": "string",
+            "enum": [
+              "directory",
+              "content",
+              "inline"
+            ],
+            "default": "directory",
+            "description": "directory (padrão): grava os XMLs em Saídas e retorna metadados JSON. content: retorna JSON com files[].content e fileName, sem gravar. inline: retorna o XML bruto e exige exatamente um XML final."
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Opcional. Falha com 409 se a revisão salva da variação mudou."
+          },
+          "inputRecords": {
+            "type": "string",
+            "enum": [
+              "all",
+              "first"
+            ],
+            "default": "all",
+            "description": "all gera para todos os registros do XML de entrada; first usa somente o primeiro grupo de registro configurado. Vale para inputXml, inputFilePath e para o modelo salvo. O XML inteiro é validado antes da seleção. Não confundir com returnSelection, que escolhe modelos de retorno."
+          }
+        }
+      },
+      "GeneratedFile": {
+        "type": "object",
+        "required": [
+          "fileName",
+          "records",
+          "sha256",
+          "sizeBytes",
+          "sizeDisplay"
+        ],
+        "properties": {
+          "fileName": {
+            "type": "string"
+          },
+          "records": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sizeDisplay": {
+            "type": "string"
+          },
+          "returnId": {
+            "type": "string"
+          },
+          "returnName": {
+            "type": "string"
+          },
+          "collisionRenamed": {
+            "type": "boolean",
+            "description": "true quando o nome precisou mudar para preservar um arquivo já existente."
+          },
+          "content": {
+            "type": "string",
+            "description": "XML completo em UTF-8, presente somente quando delivery=content. Não é base64. Após decodificar o JSON, pode ser reutilizado diretamente."
+          }
+        }
+      },
+      "GenerationResult": {
+        "type": "object",
+        "required": [
+          "requestId",
+          "fileId",
+          "sourceRevision",
+          "operation",
+          "files",
+          "delivery"
+        ],
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "fileId": {
+            "type": "string"
+          },
+          "sourceRevision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "operation": {
+            "type": "string",
+            "enum": [
+              "new",
+              "return"
+            ]
+          },
+          "files": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/GeneratedFile"
+            }
+          },
+          "composition": {
+            "type": "string",
+            "enum": [
+              "apart",
+              "mixed"
+            ]
+          },
+          "returnIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "totalRecords": {
+            "type": "integer"
+          },
+          "recordsPerReturn": {
+            "type": "integer"
+          },
+          "delivery": {
+            "type": "string",
+            "enum": [
+              "directory",
+              "content"
+            ]
+          },
+          "inputRecords": {
+            "type": "string",
+            "enum": [
+              "all",
+              "first"
+            ],
+            "description": "Presente nas respostas JSON de geração de retorno."
+          }
+        }
+      },
+      "Problem": {
+        "type": "object",
+        "required": [
+          "type",
+          "title",
+          "status",
+          "detail",
+          "code",
+          "requestId"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "example": "about:blank"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "xmlPath": {},
+          "reason": {}
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Campos, tipos, filtros ou limites inválidos. fileId deve ser enviado somente na URL.",
+        "headers": {
+          "X-Request-ID": {
+            "description": "Identificador da requisição para consulta dos logs.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "X-API-Key ausente ou inválida.",
+        "headers": {
+          "X-Request-ID": {
+            "description": "Identificador da requisição para consulta dos logs.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Arquivo, modelo de retorno ou rota não encontrado. Formatos ainda não implementados retornam 404.",
+        "headers": {
+          "X-Request-ID": {
+            "description": "Identificador da requisição para consulta dos logs.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "MethodNotAllowed": {
+        "description": "Método incompatível com a rota. Consulte o cabeçalho Allow.",
+        "headers": {
+          "X-Request-ID": {
+            "description": "Identificador da requisição para consulta dos logs.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "Allow": {
+            "schema": {
+              "type": "string"
+            }
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "Revisão divergente ou conflito de Idempotency-Key.",
+        "headers": {
+          "X-Request-ID": {
+            "description": "Identificador da requisição para consulta dos logs.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "PayloadTooLarge": {
+        "description": "Entrada, corpo ou saída excede o limite permitido.",
+        "headers": {
+          "X-Request-ID": {
+            "description": "Identificador da requisição para consulta dos logs.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "UnsupportedMediaType": {
+        "description": "Envie o corpo como application/json.",
+        "headers": {
+          "X-Request-ID": {
+            "description": "Identificador da requisição para consulta dos logs.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "UnprocessableEntity": {
+        "description": "Modelo, configuração, XML de entrada, nome gerado ou entrega incompatível. Todos os modelos selecionados precisam estar prontos.",
+        "headers": {
+          "X-Request-ID": {
+            "description": "Identificador da requisição para consulta dos logs.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "TooManyRequests": {
+        "description": "Limite de requisições ou concorrência atingido. Tente novamente após Retry-After.",
+        "headers": {
+          "X-Request-ID": {
+            "description": "Identificador da requisição para consulta dos logs.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "Retry-After": {
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Segundos antes de tentar novamente."
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "InternalServerError": {
+        "description": "Falha interna ou falha parcial de publicação. Consulte os logs com X-Request-ID.",
+        "headers": {
+          "X-Request-ID": {
+            "description": "Identificador da requisição para consulta dos logs.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "ServiceUnavailable": {
+        "description": "Banco, diretórios, logs ou processador indisponível; geração excedeu o tempo limite; ou serviço em encerramento.",
+        "headers": {
+          "X-Request-ID": {
+            "description": "Identificador da requisição para consulta dos logs.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      }
+    }
+  }
+}

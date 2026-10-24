@@ -1,11 +1,11 @@
 meta {
   name: Gerar - Retorno
   type: http
-  seq: 6
+  seq: 7
 }
 
 post {
-  url: {{baseUrl}}/api/v1/return
+  url: {{baseUrl}}/api/v1/files/xml/{{fileId}}/return
   body: json
   auth: none
 }
@@ -18,14 +18,15 @@ headers {
 
 body:json {
   {
-    "fileId": "{{fileId}}",
     "returnSelection": {
       "type": "all"
     },
-    "composition": "apart"
+    "composition": "apart",
+    "inputRecords": "all",
+    "delivery": "directory"
   }
 }
 
 docs {
-  Gera arquivos para todos os modelos de retorno prontos, usando o modelo XML da biblioteca, e salva os resultados no diretório de saída. Para selecionar modelos específicos, use returnSelection com type ids e uma lista ids. Para enviar XML, inclua inputXml; para usar um arquivo de entrada, inclua inputFilePath.
+  Usa o XML de exemplo salvo no banco e gera para todos os registros e todos os modelos de retorno. Todos os modelos selecionados precisam estar prontos. Salva um XML por modelo em Saídas. inputRecords seleciona registros; returnSelection seleciona modelos. Para enviar seu próprio XML, use inputXml no corpo; para receber o XML completo no JSON, use delivery content.
 }

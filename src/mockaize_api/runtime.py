@@ -13,6 +13,7 @@ from urllib.parse import parse_qs, quote, urlsplit
 import uuid
 
 from . import __version__
+from .api_docs import DOCUMENTATION_ROUTES, documentation_response
 from .catalog import Catalog
 from .config import load_config
 from .errors import ApiError
@@ -25,6 +26,7 @@ from .security import key_digest, verify_key
 from .state import State
 
 MAX_BODY = 12 * 1024 * 1024
+MAX_OUTPUT = 100_000_000
 
 
 def _engine_child(channel, operation, variation, body, index):
@@ -34,7 +36,8 @@ def _engine_child(channel, operation, variation, body, index):
             result = generate_new(variation, body['recordCount'], file_index=index)
         else:
             result = generate_return(variation, body['returnSelection'], body.get('composition', 'apart'),
-                                     input_xml=body.get('inputXml'), file_index=index)
+                                     input_xml=body.get('inputXml'), file_index=index,
+                                     input_records=body.get('inputRecords', 'all'))
         channel.send(('ok', result))
     except ApiError as error:
         channel.send(('error', (error.status, error.code, error.detail, error.extensions)))
@@ -101,10 +104,10 @@ def _nonempty_string(value):
 
 def validate_generation(operation: str, body: object) -> dict:
     common = {'fileId', 'delivery', 'expectedRevision'}
-    extra = {'recordCount'} if operation == 'new' else {'returnSelection', 'composition', 'inputXml', 'inputFilePath'}
+    extra = {'recordCount'} if operation == 'new' else {'returnSelection', 'composition', 'inputXml', 'inputFilePath', 'inputRecords'}
     if not isinstance(body, dict) or set(body) - common - extra or not _nonempty_string(body.get('fileId')):
         raise _invalid()
-    if body.get('delivery', 'directory') not in ('directory', 'inline'):
+    if body.get('delivery', 'directory') not in ('directory', 'content', 'inline'):
         raise _invalid()
     if 'expectedRevision' in body and (type(body['expectedRevision']) is not int or body['expectedRevision'] < 1):
         raise _invalid()
@@ -114,6 +117,8 @@ def validate_generation(operation: str, body: object) -> dict:
             raise _invalid()
         return body
     if body.get('composition', 'apart') not in ('apart', 'mixed'):
+        raise _invalid()
+    if body.get('inputRecords', 'all') not in ('all', 'first'):
         raise _invalid()
     if 'inputXml' in body and 'inputFilePath' in body:
         raise _invalid()
@@ -208,7 +213,7 @@ class Application:
                     raise ApiError(422, 'DELIVERY_INCOMPATIBLE', 'Entrega inline exige exatamente um XML final.')
             index = self.state.next_index(body['fileId'])
             documents = run_engine(operation, variation, execution_body, index, self.policy.generation_timeout_seconds, self.stop_event)
-            if not documents or sum(len(item['content']) for item in documents) > 100_000_000:
+            if not documents or sum(len(item['content']) for item in documents) > MAX_OUTPUT:
                 raise ApiError(413, 'OUTPUT_LIMIT_EXCEEDED', 'O resultado excede 100 MB.')
             if body.get('delivery', 'directory') == 'inline':
                 if len(documents) != 1:
@@ -222,11 +227,22 @@ class Application:
                     'X-Mockaize-SHA256': meta['sha256'], 'X-Mockaize-Size-Bytes': str(meta['sizeBytes']),
                     'X-Mockaize-Size-Display': meta['sizeDisplay']}}
             else:
-                files = publish(self.config.output_directory, documents)
+                delivery = body.get('delivery', 'directory')
+                if delivery == 'content':
+                    files = [
+                        {**{key: value for key, value in document.items() if key != 'content'},
+                         'fileName': safe_filename(document['fileName']),
+                         **metadata(document['content']),
+                         'content': document['content'].decode('utf-8')}
+                        for document in documents
+                    ]
+                else:
+                    files = publish(self.config.output_directory, documents)
                 value = {'requestId': request_id, 'fileId': body['fileId'], 'sourceRevision': variation['revision'],
-                         'operation': operation, 'files': files}
+                         'operation': operation, 'delivery': delivery, 'files': files}
                 if operation == 'return':
                     value['composition'] = body.get('composition', 'apart')
+                    value['inputRecords'] = body.get('inputRecords', 'all')
                     selection = body['returnSelection']
                     ids = (selection['ids'] if selection['type'] == 'ids' else
                            [model['id'] for model in variation['config'].get('returnModels', [])])
@@ -235,6 +251,8 @@ class Application:
                         value['totalRecords'] = documents[0]['records']
                         value['recordsPerReturn'] = value['totalRecords'] // len(ids)
                 response = _json(200, value)
+                if delivery == 'content' and len(response['body']) > MAX_OUTPUT:
+                    raise ApiError(413, 'OUTPUT_LIMIT_EXCEEDED', 'A resposta JSON excede 100 MB. Reduza a geração ou use delivery=directory.')
         except ApiError as error:
             response = _problem(error, request_id)
             if error.extensions.get('residue'):
@@ -347,6 +365,13 @@ class Handler(BaseHTTPRequestHandler):
         app = self.server.application
         url = urlsplit(self.path)
         path = url.path
+        if path in DOCUMENTATION_ROUTES:
+            self.route = path
+            if self.command not in ('GET', 'HEAD'):
+                return self._method('GET, HEAD', request_id)
+            if url.query:
+                raise _invalid()
+            return documentation_response(path)
         if path == '/health':
             self.route = '/health'
             if self.command != 'GET':
@@ -354,15 +379,17 @@ class Handler(BaseHTTPRequestHandler):
             if url.query:
                 raise _invalid()
             return app.health()
-        route = re.fullmatch(r'/api/v1/(files(?:/([A-Za-z0-9_-]{1,128})/(modes|returns))?|new|return)', path)
+        route = re.fullmatch(
+            r'/api/v1/files/xml(?:/([A-Za-z0-9_-]{1,128})(?:/(modes|returns|new|return))?)?', path)
         if not route:
             raise ApiError(404, 'ROUTE_NOT_FOUND', 'Rota não encontrada.')
-        self.route = '/api/v1/' + ('files/{fileId}/' + route[3] if route[3] else route[1])
+        file_id, action = route.groups()
+        self.route = '/api/v1/files/xml' + ('/{fileId}' if file_id else '') + ('/' + action if action else '')
         keys = self.headers.get_all('X-API-Key', [])
         if len(keys) != 1 or not verify_key(app.config_path, keys[0]):
             raise ApiError(401, 'UNAUTHORIZED', 'Chave da API ausente ou inválida.')
         app.rate_check()
-        expected = 'GET' if route[1].startswith('files') else 'POST'
+        expected = 'POST' if action in ('new', 'return') else 'GET'
         if self.command != expected:
             return self._method(expected, request_id)
         if expected == 'POST':
@@ -371,12 +398,20 @@ class Handler(BaseHTTPRequestHandler):
             idem = self.headers.get_all('Idempotency-Key', [])
             if len(idem) > 1:
                 raise _invalid()
-            return app.generate(route[1], self._body(), request_id, idem[0] if idem else None)
+            body = self._body()
+            if not isinstance(body, dict) or 'fileId' in body:
+                raise _invalid()
+            return app.generate(action, {**body, 'fileId': file_id}, request_id, idem[0] if idem else None)
         query = parse_qs(url.query, keep_blank_values=True)
-        if route[2]:
+        if file_id:
             if query:
                 raise _invalid()
-            result = app.catalog.modes(route[2]) if route[3] == 'modes' else app.catalog.returns(route[2])
+            if action == 'modes':
+                result = app.catalog.modes(file_id)
+            elif action == 'returns':
+                result = app.catalog.returns(file_id)
+            else:
+                result = app.catalog.file(file_id)
             return _json(200, result)
         if set(query) - {'q', 'limit', 'cursor'} or any(len(values) != 1 for values in query.values()):
             raise _invalid()

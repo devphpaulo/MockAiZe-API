@@ -1,0 +1,33 @@
+meta {
+  name: Gerar - Retorno com XML enviado e todos os registros
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{baseUrl}}/api/v1/files/xml/{{fileId}}/return
+  body: json
+  auth: none
+}
+
+headers {
+  X-API-Key: {{apiKey}}
+  Content-Type: application/json
+  Accept: application/json
+}
+
+body:json {
+  {
+    "inputXml": "<Document><Record><Value>valor-1</Value></Record><Record><Value>valor-2</Value></Record></Document>",
+    "inputRecords": "all",
+    "returnSelection": {
+      "type": "all"
+    },
+    "composition": "apart",
+    "delivery": "content"
+  }
+}
+
+docs {
+  Substitua inputXml por um XML compatível com a estrutura de entrada configurada na sua variação. As regras de cópia e os cálculos de entrada usam os valores enviados. Gera para todos os registros e todos os modelos de retorno, devolvendo files[].content no JSON sem gravar em Saídas. Se inputXml e inputFilePath forem omitidos, usa o XML salvo no banco.
+}

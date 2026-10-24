@@ -33,6 +33,23 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(2, result['records'])
         self.assertIn(b'<a>8</a>', result['content'])
 
+    def test_return_first_record_applies_rules_to_only_the_first_input(self):
+        v = variation()
+        source = '<root><r><a>9</a></r><r><a>8</a></r></root>'
+        v['config']['inputByMode']['return']['xml'] = source
+        for input_xml in (source, None):
+            with self.subTest(origin='saved' if input_xml is None else 'request'):
+                result = generate_return(v, {'type': 'all'}, input_xml=input_xml, input_records='first')[0]
+                self.assertEqual(result['records'], 1)
+                doc = minidom.parseString(result['content'])
+                self.assertEqual([node.firstChild.data for node in doc.getElementsByTagName('a')], ['9'])
+
+    def test_first_record_selection_still_validates_the_whole_input(self):
+        with self.assertRaises(ApiError) as caught:
+            generate_return(variation(), {'type': 'all'}, input_records='first',
+                            input_xml='<root><r><a>9</a></r><r><different/></r></root>')
+        self.assertEqual(caught.exception.code, 'INPUT_XML_STRUCTURE_MISMATCH')
+
     def test_second_divergent_record_is_rejected(self):
         with self.assertRaises(ApiError) as caught:
             validate_return_input('<root><r><a>1</a></r></root>', path('root', 'r'), '<root><r><a>1</a></r><r><b>2</b></r></root>')

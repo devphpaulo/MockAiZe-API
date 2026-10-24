@@ -163,6 +163,10 @@ class Catalog:
                     'revision': row['revision'], 'file_index': row['file_index'],
                     'config': config, 'libraryPath': node_path[1]}
 
+    def file(self, file_id: str):
+        snapshot = self.snapshot(file_id)
+        return {key: snapshot[key] for key in ('id', 'name', 'libraryPath', 'revision')}
+
     def files(self, q: str = '', limit: int = 100, cursor: str | None = None):
         if not isinstance(q, str) or len(q) > 512 or type(limit) is not int or not 1 <= limit <= 200:
             raise _invalid_cursor()

@@ -77,13 +77,13 @@ def main():
 
         def health_and_catalog(generate=False):
             opener = build_opener(ProxyHandler({}))
-            for route in ('/health', '/api/v1/files'):
+            for route in ('/health', '/swagger/', '/openapi.json', '/api/v1/files/xml'):
                 with opener.open(Request(f'http://127.0.0.1:{port}{route}', headers={'X-API-Key': key}), timeout=10) as response:
                     assert response.status == 200
             assert WindowsDriver().status() == 'running'
             if generate:
-                body = json.dumps({'fileId': 'file-1', 'recordCount': 3}).encode()
-                with opener.open(Request(f'http://127.0.0.1:{port}/api/v1/new', data=body,
+                body = json.dumps({'recordCount': 3}).encode()
+                with opener.open(Request(f'http://127.0.0.1:{port}/api/v1/files/xml/file-1/new', data=body,
                                   headers={'X-API-Key': key, 'Content-Type': 'application/json'}), timeout=30) as response:
                     manifest = json.load(response)
                 for entry in manifest['files']:

@@ -371,12 +371,17 @@ def _select(config,selection):
     return selected
 
 
-def generate_return(variation,selection,composition='apart',input_xml=None,file_index=0):
+def generate_return(variation,selection,composition='apart',input_xml=None,file_index=0,input_records='all'):
     try:
         if composition not in ('apart','mixed'):raise ValueError('Composição inválida.')
+        if input_records not in ('all','first'):raise ValueError('Seleção de registros de entrada inválida.')
         config=copy.deepcopy(variation['config']);config['name']=variation.get('name','mock');template,group=_input(config,'return')
         if not template or not group:raise ApiError(422,'RETURN_INPUT_TEMPLATE_NOT_READY','Modelo de entrada de Retorno não está pronto.')
-        source=template if input_xml is None else input_xml;doc=validate_return_input(template,group,source);count=len(records(doc,group));selected=_select(config,selection)
+        source=template if input_xml is None else input_xml;doc=validate_return_input(template,group,source)
+        if input_records=='first':
+            for node in records(doc,group)[1:]:remove(node)
+            source=doc.toxml()
+        count=len(records(doc,group));selected=_select(config,selection)
         generated=[];total=0
         for model in selected:
             item,output,output_group=_generate(config,'return',count,source,group,model['outputXml'],model['outputGroup'],model.get('rules',{}),model.get('presence',{}),model.get('headers',[]),model.get('filename') or {'type':'literal','value':model['name']},file_index)

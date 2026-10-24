@@ -37,9 +37,9 @@ def main():
         key = create_credentials(config)
         opener = build_opener(ProxyHandler({}))
         base = f'http://127.0.0.1:{port}'
-        def call(route, payload=None):
+        def call(route, payload=None, authenticated=True):
             request = Request(base + route, data=json.dumps(payload).encode() if payload is not None else None,
-                              headers={'X-API-Key': key, 'Content-Type': 'application/json'})
+                              headers={**({'X-API-Key': key} if authenticated else {}), 'Content-Type': 'application/json'})
             with opener.open(request, timeout=30) as response:
                 return dict(response.headers), response.read()
         process = subprocess.Popen([str(binary), '--run', '--config', str(config)],
@@ -56,22 +56,39 @@ def main():
                 if process.poll() is not None or time.monotonic() > deadline:
                     raise RuntimeError('Executável não confirmou saúde.')
                 time.sleep(0.2)
-            _, body = call('/api/v1/files')
+            _, body = call('/swagger/', authenticated=False)
+            assert b'/swagger/swagger-ui-bundle.js' in body
+            for name in ('swagger-ui-bundle.js', 'swagger-ui.css', 'initializer.js', 'favicon.ico'):
+                _, asset = call('/swagger/' + name, authenticated=False)
+                assert asset
+            _, body = call('/openapi.json', authenticated=False)
+            spec = json.loads(body)
+            assert '/api/v1/files/xml/{fileId}/new' in spec['paths']
+            assert 'content' in spec['components']['schemas']['NewXmlRequest']['properties']['delivery']['enum']
+            _, body = call('/api/v1/files/xml')
             assert json.loads(body)['items'][0]['id'] == 'file-1'
+            _, body = call('/api/v1/files/xml/file-1')
+            assert json.loads(body)['id'] == 'file-1'
             started = time.monotonic()
-            headers, body = call('/api/v1/new', {'fileId': 'file-1', 'recordCount': 500, 'delivery': 'inline'})
+            headers, body = call('/api/v1/files/xml/file-1/new', {'recordCount': 500, 'delivery': 'inline'})
             assert len(ET.fromstring(body).findall('Record')) == 500
             assert hashlib.sha256(body).hexdigest() == headers['X-Mockaize-SHA256']
             elapsed = time.monotonic() - started
-            _, manifest = call('/api/v1/return', {'fileId': 'file-1', 'returnSelection': {'type': 'all'}})
+            _, manifest = call('/api/v1/files/xml/file-1/return', {'returnSelection': {'type': 'all'}})
             manifest = json.loads(manifest)
             assert len(manifest['files']) == 2
             for entry in manifest['files']:
                 content = (root / 'output' / entry['fileName']).read_bytes()
                 assert hashlib.sha256(content).hexdigest() == entry['sha256']
-            headers, body = call('/api/v1/return', {'fileId': 'file-1', 'returnSelection': {'type': 'all'},
+            headers, body = call('/api/v1/files/xml/file-1/return', {'returnSelection': {'type': 'all'},
                                                    'composition': 'mixed', 'delivery': 'inline'})
             assert len(ET.fromstring(body).findall('Record')) == 2
+            _, body = call('/api/v1/files/xml/file-1/return', {
+                'returnSelection': {'type': 'all'}, 'delivery': 'content', 'inputRecords': 'first',
+                'inputXml': '<Document><Record><Value>one</Value></Record><Record><Value>two</Value></Record></Document>'})
+            result = json.loads(body)
+            assert len(result['files']) == 2
+            assert all(len(ET.fromstring(item['content']).findall('Record')) == 1 for item in result['files'])
             print(json.dumps({'frozenSmoke': 'passed', 'newRecords': 500,
                               'newDurationSeconds': round(elapsed, 3), 'apartFiles': 2, 'mixedRecords': 2}))
         finally:

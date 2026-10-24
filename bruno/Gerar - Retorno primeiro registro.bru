@@ -1,0 +1,33 @@
+meta {
+  name: Gerar - Retorno com XML enviado e primeiro registro
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{baseUrl}}/api/v1/files/xml/{{fileId}}/return
+  body: json
+  auth: none
+}
+
+headers {
+  X-API-Key: {{apiKey}}
+  Content-Type: application/json
+  Accept: application/json
+}
+
+body:json {
+  {
+    "inputXml": "<Document><Record><Value>primeiro</Value></Record><Record><Value>segundo</Value></Record></Document>",
+    "inputRecords": "first",
+    "returnSelection": {
+      "type": "all"
+    },
+    "composition": "apart",
+    "delivery": "content"
+  }
+}
+
+docs {
+  Substitua inputXml por um XML compatível com a configuração. Usa somente o primeiro grupo de registro configurado, mas valida a estrutura do documento inteiro. Retorna um XML de um registro por modelo selecionado em files[].content. Em composition mixed, retorna um XML com um registro por modelo. Não grava arquivos em Saídas.
+}
