@@ -6,7 +6,7 @@ Serviço independente para consultar o SQLite do MockAíZé e gerar XML com o es
 
 Uma única cópia do runtime Python executa o serviço HTTP/XML. Não inclui PySide/Qt, Shiboken, Pythonwin, TLS/OpenSSL opcional ou cópias de Python nos frontends. O pacote inclui Swagger UI local para documentação e execução das requisições. Bytes e hashes exatos dos executáveis aparecem no Actions.
 
-Estado: `0.2.0.dev0`, em validação. O setup cria as pastas de trabalho ausentes, inclusive sob `C:\Users\<usuário>\OneDrive\Documentos`, mesmo quando o OneDrive não está instalado; nesse caso, o caminho é uma pasta local comum.
+Estado: `0.2.1.dev0`, em validação. O setup cria as pastas de trabalho ausentes, inclusive sob `C:\Users\<usuário>\OneDrive\Documentos`, mesmo quando o OneDrive não está instalado; nesse caso, o caminho é uma pasta local comum.
 
 ## Recursos
 
@@ -24,6 +24,8 @@ As pastas de banco, entrada, saída, logs e configuração também podem usar co
 ## Usar a API e o Swagger
 
 Depois de instalar, abra `http://127.0.0.1:6578/` ou `/swagger/`. A interface funciona sem internet e permite executar as operações: use **Authorize** para informar a chave `X-API-Key`. O OpenAPI está em `/openapi.json` e em `/swagger/v1/swagger.json`. A documentação não contém chaves reais.
+
+`MockAiZeApiService.exe` hospeda o serviço iniciado automaticamente pelo Windows. Ao abri-lo manualmente, ele mostra uma orientação de uso. Para configurar, use `MockAiZeApiConfig.exe`; para iniciar ou parar o serviço, use **Serviços do Windows** (`services.msc`) e procure **MockAíZé API**.
 
 Todas as operações de arquivos têm o formato na URL. Nesta versão, apenas XML está implementado; CSV, JSON e CNAB terão namespaces próprios quando seus motores forem implementados.
 

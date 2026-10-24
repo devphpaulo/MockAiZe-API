@@ -6,6 +6,21 @@ SERVICE_NAME = 'MockAiZeApi'
 REGISTRY_KEY = r'SOFTWARE\MockAiZe\API'
 
 
+def show_interactive_help() -> None:
+    import ctypes
+    ctypes.windll.user32.MessageBoxW(
+        None,
+        'MockAiZeApiService.exe é executado em segundo plano pelo Windows.\n\n'
+        'Para usar a API e o Swagger, abra o endereço configurado no navegador.\n'
+        'Endereço padrão: http://127.0.0.1:6578/\n\n'
+        'Para alterar a configuração, abra MockAiZeApiConfig.exe.\n'
+        'Para iniciar ou parar o serviço, abra Serviços do Windows (services.msc) '
+        'e procure MockAíZé API.',
+        'MockAíZé API — Serviço Windows',
+        0x40,  # MB_OK | MB_ICONINFORMATION
+    )
+
+
 def registered_config() -> Path:
     import winreg
     with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, REGISTRY_KEY) as key:
@@ -17,6 +32,7 @@ def registered_config() -> Path:
 
 
 def dispatch() -> None:
+    import pywintypes
     import servicemanager
     import win32service
     import win32serviceutil
@@ -47,4 +63,11 @@ def dispatch() -> None:
 
     servicemanager.Initialize()
     servicemanager.PrepareToHostSingle(ApiService)
-    servicemanager.StartServiceCtrlDispatcher()
+    try:
+        servicemanager.StartServiceCtrlDispatcher()
+    except pywintypes.error as error:
+        if error.winerror != 1063:
+            raise
+        # SCM starts this process without arguments. Double-clicking the same
+        # executable also reaches this branch, but has no SCM connection.
+        show_interactive_help()

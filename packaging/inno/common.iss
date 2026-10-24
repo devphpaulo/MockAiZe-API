@@ -5,8 +5,8 @@
 [Setup]
 AppId=MockAiZeApiNative{#Frontend}
 AppName=MockAiZe API
-AppVersion=0.2.0
-VersionInfoVersion=0.2.0.0
+AppVersion=0.2.1
+VersionInfoVersion=0.2.1.0
 AppPublisher=MockAiZe
 AppPublisherURL=https://github.com/devphpaulo/MockAiZe-API
 AppSupportURL=https://github.com/devphpaulo/MockAiZe-API/issues
