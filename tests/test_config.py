@@ -8,6 +8,30 @@ from mockaize_api.config import ApiConfig, ConfigurationError, load_config, save
 
 
 class ConfigurationTests(unittest.TestCase):
+    def test_cleanup_rejects_another_registered_windows_profile_for_service_account(self):
+        profile = self.root / 'other-profile'
+        values = dict(self.values, inputDirectory=str(profile), cleanup={'inputs': {'mode': 'age', 'days': 1}})
+        with patch('mockaize_api.config._windows_profile_paths', return_value={profile}):
+            with self.assertRaises(ConfigurationError):
+                from mockaize_api.config import ApiConfig
+                ApiConfig.from_mapping(values)
+
+    def test_windows_profile_discovery_fails_closed_for_invalid_locations(self):
+        from contextlib import nullcontext
+        import os
+        import sys
+        from types import SimpleNamespace
+        from mockaize_api.config import _windows_profile_paths
+        for value in ('', 'relative-profile', str(self.root / '%MISSING_PROFILE_VARIABLE%')):
+            registry = SimpleNamespace(HKEY_LOCAL_MACHINE=1,
+                OpenKey=lambda *args: nullcontext(1), QueryInfoKey=lambda *args: (1, 0, 0),
+                EnumKey=lambda *args: 'SID', QueryValueEx=lambda key, name: (
+                    str(self.root / 'profiles') if name == 'ProfilesDirectory' else value, 1))
+            with self.subTest(value=value), patch.dict(sys.modules, winreg=registry), \
+                    patch('mockaize_api.config.os', SimpleNamespace(name='nt', path=os.path)):
+                with self.assertRaises(ConfigurationError):
+                    _windows_profile_paths()
+
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)

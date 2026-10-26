@@ -20,8 +20,8 @@ Referência: pacote `tasks/refinamento/planos-api-site-reformulations`, lido int
 | API-03 | API-01/02 | Ye | Concluída | 190 testes, 189 aprovados e 1 ignorado; ResourceWarning como erro; Dan sem bloqueantes; Luda APROVADO |
 | API-04 | API-01..03 | Oliver | Concluída | 201 testes, 200 aprovados e 1 ignorado; Dan sem bloqueantes; Luda APROVADO |
 | API-05 | API-01..04; Site para integração real | Ye | Adiada por orientação do usuário | Ver `Continuar após implementação do site.md` |
-| API-06 | API-01..04; XML/OLD adiado pelo usuário | Ye | Em execução | Limpeza startup e replay; proteção do diretório reservado de presets |
-| API-07 | API-01..06 | Oliver | Pendente | Configurador e instalador |
+| API-06 | API-01..04; XML/OLD adiado pelo usuário | Ye | Concluída no recorte independente | 223 testes, 222 aprovados e 1 ignorado; Dan sem bloqueantes; Luda APROVADO COM RISCO |
+| API-07 | Tarefas API anteriores, exceto XML/OLD adiado | Oliver | Em execução | Configurador/instalador; configuração de presets permanece pendente do Site |
 | API-08 | API-01..07 + SITE-05 | Oliver | Pendente | Documentação e compatibilidade |
 | API-FV | API-08 + SITE-06 | Dan/Luda/Yorke | Pendente | Verificação final e integração |
 
@@ -43,3 +43,22 @@ Orientação posterior do usuário em 26/10/2026: manter a configuração/integr
 ## API-03: evidência e limites da validação
 
 Os testes verificam política customizada/desabilitada com 1.000 registros, retorno mixed com 2.000 e validação da fonte completa antes de first. Um teste HTTP envia XML UTF-8 real de 4,4 MB em JSON com escaping acima de 12 MiB. Os tetos globais de saída foram removidos e testados por simulação direcionada de tamanho e inspeção, sem gerar arquivos reais acima de 100 MB. Parser seguro, profundidade e limites semânticos das fórmulas permanecem. A função legada de leitura de arquivo em `inputs.py` não integra mais o fluxo HTTP de retorno.
+
+## Fontes oficiais consultadas para API-06
+
+Pesquisa Felicity, 26/10/2026, sobre exclusão/verificação por handle no Windows:
+
+- [SetFileInformationByHandle](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-setfileinformationbyhandle): a disposição de exclusão exige acesso DELETE no handle.
+- [FILE_DISPOSITION_INFO](https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_disposition_info): estrutura com BOOLEAN e exclusão após fechamento; não abrir com DELETE_ON_CLOSE antes de validar.
+- [CreateFileW](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilew): respeitar conflitos de compartilhamento e permissões, sem forçar exclusão.
+- [GetFinalPathNameByHandleW](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfinalpathnamebyhandlew): conferir o destino final do handle; em SMB, falta de acesso a componentes pode impedir normalização. Essa falha deve preservar o arquivo e ser tratada como indisponibilidade/retentativa.
+
+A consulta sustenta as chamadas de plataforma; somente testes executados sustentam a validação do produto.
+
+## API-06: validação e riscos aceitos neste recorte
+
+- Exclusão por handle, arquivo bloqueado, junções e troca de junção foram testados de fato no Windows, sempre em diretórios descartáveis. A sentinela externa permaneceu intacta.
+- Corte estrito por data, recursão, retentativas, encerramento, atendimento durante scan bloqueado e replay sem avanço de contador estão cobertos.
+- Expansão localizada de ownership: `config.py` e `test_config.py` receberam a proteção de perfis Windows registrados, independente da conta NetworkService. Valores de perfil vazios, relativos ou com variável não resolvida falham antes da exclusão.
+- SMB real não verificado. Operações de filesystem já iniciadas não podem ser interrompidas à força; o worker é único e daemon, com espera limitada no encerramento. Esse risco não impede continuar a implementação, mas não equivale a validar rede/instalação nativa.
+- Um reset Windows em resposta HTTP 405 foi observado em uma execução focada; não se reproduziu no teste dirigido ou nas suítes completas. A causalidade permanece inconclusiva, e o parser HTTP não foi alterado nesta tarefa.

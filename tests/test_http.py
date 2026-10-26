@@ -19,6 +19,141 @@ from mockaize_api.security import create_credentials
 class HttpTests(unittest.TestCase):
     source_xml = '<Document><Record><Value>example</Value></Record></Document>'
 
+    def test_error_before_body_read_delivers_json_with_unread_windows_socket_bytes(self):
+        from http.client import HTTPResponse
+        reached, release = threading.Event(), threading.Event()
+        actual = self.server.application.log.write
+        def pause(**values):
+            if values.get('method') == 'POST' and values.get('route') == '/openapi.json':
+                reached.set()
+                release.wait(2)
+            return actual(**values)
+        client = socket.create_connection(self.server.server_address, timeout=3)
+        try:
+            with patch.object(self.server.application.log, 'write', side_effect=pause):
+                client.sendall(b'POST /openapi.json HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: 1024\r\n\r\n')
+                self.assertTrue(reached.wait(2))
+                client.sendall(b'x' * 1024)
+                release.set()
+                response = HTTPResponse(client)
+                response.begin()
+                self.assertEqual(response.status, 405)
+                self.assertEqual(json.loads(response.read())['error']['code'], 'METHOD_NOT_ALLOWED')
+        finally:
+            release.set()
+            client.close()
+
+    def test_directory_replay_missing_or_replaced_is_410_without_generation_or_state_change(self):
+        route = '/api/v1/files/xml/file-1/new'
+        payload = {'recordCount': 1, 'delivery': 'directory'}
+        for change in ('missing', 'same-size-replacement', 'different-size'):
+            headers = {'Idempotency-Key': 'artifact-' + change}
+            status, _, body = self.call('POST', route, payload, headers)
+            self.assertEqual(status, 200, body)
+            value = json.loads(body)
+            path = self.root / 'output' / value['files'][0]['fileName']
+            with self.server.application.state.connect() as connection:
+                before = connection.execute('SELECT next_index FROM sequences WHERE file_id=?', ('file-1',)).fetchone()
+                replay = connection.execute('SELECT status,headers,body FROM replays WHERE key=?',
+                                            (headers['Idempotency-Key'],)).fetchone()
+            if change == 'missing':
+                path.unlink()
+            elif change == 'same-size-replacement':
+                path.write_bytes(path.read_bytes().replace(b'example', b'changed'))
+            else:
+                path.write_bytes(b'replaced')
+            with patch('mockaize_api.runtime.run_engine') as engine:
+                status, response_headers, content = self.call('POST', route, payload, headers)
+            engine.assert_not_called()
+            result = json.loads(content)
+            self.assertEqual((status, result['error']['code']), (410, 'OUTPUT_EXPIRED'))
+            self.assertEqual(result['error']['traceId'], response_headers['X-Request-ID'])
+            self.assertNotEqual(result['error']['traceId'], value['requestId'])
+            self.assertNotIn('X-Idempotent-Replay', response_headers)
+            with self.server.application.state.connect() as connection:
+                self.assertEqual(connection.execute('SELECT next_index FROM sequences WHERE file_id=?',
+                                                    ('file-1',)).fetchone(), before)
+                self.assertEqual(connection.execute('SELECT status,headers,body FROM replays WHERE key=?',
+                                                    (headers['Idempotency-Key'],)).fetchone(), replay)
+
+    def test_directory_replay_permission_failure_is_503_and_preserves_replay(self):
+        route = '/api/v1/files/xml/file-1/new'
+        payload = {'recordCount': 1}
+        headers = {'Idempotency-Key': 'artifact-inaccessible'}
+        status, _, body = self.call('POST', route, payload, headers)
+        self.assertEqual(status, 200, body)
+        path = self.root / 'output' / json.loads(body)['files'][0]['fileName']
+        actual = Path.open
+        def denied(candidate, *args, **kwargs):
+            if candidate == path:
+                raise PermissionError
+            return actual(candidate, *args, **kwargs)
+        with patch('pathlib.Path.open', new=denied), patch('mockaize_api.runtime.run_engine') as engine:
+            status, _, content = self.call('POST', route, payload, headers)
+        engine.assert_not_called()
+        self.assertEqual((status, json.loads(content)['error']['code']), (503, 'DEPENDENCY_UNAVAILABLE'))
+        status, replay_headers, replay = self.call('POST', route, payload, headers)
+        self.assertEqual(status, 200, replay)
+        self.assertEqual(replay, body)
+        self.assertEqual(replay_headers['X-Idempotent-Replay'], 'true')
+
+    def test_content_and_inline_replay_survive_missing_output_directory(self):
+        route = '/api/v1/files/xml/file-1/new'
+        for delivery in ('content', 'inline'):
+            payload = {'recordCount': 1, 'delivery': delivery}
+            headers = {'Idempotency-Key': 'persistent-' + delivery}
+            status, _, body = self.call('POST', route, payload, headers)
+            self.assertEqual(status, 200, body)
+            (self.root / 'output').rmdir()
+            try:
+                status, replay_headers, replay = self.call('POST', route, payload, headers)
+                self.assertEqual(status, 200, replay)
+                self.assertEqual(replay, body)
+                self.assertEqual(replay_headers['X-Idempotent-Replay'], 'true')
+            finally:
+                (self.root / 'output').mkdir()
+
+    def test_serve_starts_one_cleanup_round_and_answers_while_scan_is_blocked(self):
+        from mockaize_api.housekeeping import Housekeeping
+        from mockaize_api.runtime import serve
+        with socket.socket() as listener:
+            listener.bind(('127.0.0.1', 0))
+            port = listener.getsockname()[1]
+        values = self.server.application.config.to_mapping()
+        values['port'] = port
+        save_config(self.config_path, ApiConfig.from_mapping(values))
+        reached, release, stop = threading.Event(), threading.Event(), threading.Event()
+        cleaners = []
+        def factory(*args, **kwargs):
+            cleaner = Housekeeping(*args, **kwargs)
+            cleaners.append(cleaner)
+            return cleaner
+        def blocked_scan(*args):
+            reached.set()
+            release.wait(3)
+            return False
+        with patch('mockaize_api.runtime.Housekeeping', side_effect=factory), \
+                patch.object(Housekeeping, '_scan_root', side_effect=blocked_scan):
+            thread = threading.Thread(target=serve, args=(self.config_path, stop))
+            thread.start()
+            try:
+                self.assertTrue(reached.wait(2))
+                connection = HTTPConnection('127.0.0.1', port, timeout=2)
+                try:
+                    connection.request('GET', '/health')
+                    response = connection.getresponse()
+                    self.assertEqual(response.status, 200, response.read())
+                finally:
+                    connection.close()
+                self.assertEqual(len(cleaners), 1)
+                self.assertFalse(cleaners[0].start())
+            finally:
+                stop.set()
+                release.set()
+                thread.join(3)
+            self.assertFalse(thread.is_alive())
+            self.assertTrue(cleaners[0].finished.is_set())
+
     def configure_limits(self, limits):
         values = self.server.application.config.to_mapping()
         values['limits'] = limits

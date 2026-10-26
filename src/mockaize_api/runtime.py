@@ -20,6 +20,7 @@ from .api_docs import DOCUMENTATION_ROUTES, documentation_response
 from .catalog import Catalog
 from .config import load_config
 from .errors import ApiError
+from .housekeeping import FileActivity, Housekeeping, verify_directory_replay
 from .policy import Policy, ResolvedPolicy
 from .preflight import check_environment, _check_directories, PreflightError
 from .publication import metadata, publish, safe_filename
@@ -180,6 +181,7 @@ class Application:
         self.rate_lock = threading.Lock()
         self.rate = deque()
         self.stop_event = threading.Event()
+        self.file_activity = FileActivity()
 
     def rate_check(self):
         now = time.monotonic()
@@ -216,6 +218,10 @@ class Application:
         if idempotency_key:
             replay = self.state.begin(operation, idempotency_key, fingerprint)
             if replay:
+                try:
+                    verify_directory_replay(replay, self.config.output_directory, self.file_activity)
+                except ApiError as error:
+                    return _problem(error, request_id)
                 replay['headers']['X-Idempotent-Replay'] = 'true'
                 return replay
         if not self.generation_slots.acquire(blocking=False):
@@ -224,6 +230,7 @@ class Application:
             if idempotency_key:
                 self.state.cancel(operation, idempotency_key)
             return response
+        self.file_activity.begin_generation()
         try:
             variation = self.catalog.snapshot(body['fileId'])
             if 'expectedRevision' in body and body['expectedRevision'] != variation['revision']:
@@ -282,6 +289,7 @@ class Application:
         except Exception:
             response = _problem(ApiError(500, 'INTERNAL_ERROR', 'Falha interna na operação.'), request_id)
         finally:
+            self.file_activity.end_generation()
             self.generation_slots.release()
         if idempotency_key:
             self.state.complete(operation, idempotency_key, response)
@@ -604,8 +612,12 @@ def serve(config_path: Path, stop_event: threading.Event | None = None) -> None:
     app.log.write(method='START', route='service', status=200)
     stop = stop_event or threading.Event()
     app.stop_event = stop
+    cleaner = Housekeeping(app.config, app.policy, config_path, app.log,
+                           activity=app.file_activity, stop_event=stop,
+                           binaries=(Path(sys.executable).resolve().parent, Path(__file__).resolve().parent))
     with ApiServer((config.host, config.port), app) as server:
         server.timeout = 0.25
+        cleaner.start()
         try:
             while not stop.is_set():
                 server.handle_request()
@@ -613,4 +625,5 @@ def serve(config_path: Path, stop_event: threading.Event | None = None) -> None:
             stop.set()
         finally:
             server.close_clients()
+            cleaner.stop()
     app.log.write(method='STOP', route='service', status=200)

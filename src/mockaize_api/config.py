@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 import json
 import os
 from pathlib import Path
+import re
 import tempfile
 
 MAX_CONFIG_BYTES = 65_536
@@ -182,17 +183,56 @@ def validate_cleanup_paths(config: ApiConfig, protected_paths: tuple[Path, ...] 
     protected = [config.database_path.resolve(), config.presets_directory.resolve(),
                  *(Path(path).resolve() for path in protected_paths)]
     home = Path.home().resolve()
+    profile_paths = _windows_profile_paths() if any(
+        getattr(config.cleanup, key) is None or getattr(config.cleanup, key).mode != 'disabled'
+        for key in roots) else set()
     for key, root in roots.items():
         rule = getattr(config.cleanup, key)
         if rule is not None and rule.mode == 'disabled':
             continue
-        if root == Path(root.anchor) or home.is_relative_to(root):
+        if (root == Path(root.anchor) or home.is_relative_to(root)
+                or any(profile.is_relative_to(root) for profile in profile_paths)):
             raise ConfigurationError('cleanup.' + key, 'A limpeza exige um diretório específico da aplicação.')
         if any(path.is_relative_to(root) or root.is_relative_to(path)
                for other, path in roots.items() if other != key):
             raise ConfigurationError('cleanup.' + key, 'As raízes de limpeza não podem ser iguais ou sobrepostas.')
         if any(path.is_relative_to(root) or root.is_relative_to(path) for path in protected):
             raise ConfigurationError('cleanup.' + key, 'A raiz de limpeza contém arquivos ou diretórios protegidos.')
+
+
+def _windows_profile_paths() -> set[Path]:
+    """Read Windows' registered profile locations, independently of the service account.
+
+    Microsoft documents ProfilesDirectory and ProfileImagePath under ProfileList.
+    An unavailable registry must not silently turn an empty profile list into permission to delete.
+    """
+    if os.name != 'nt':
+        return set()
+    def profile_path(value):
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError
+        expanded = os.path.expandvars(value)
+        path = Path(expanded)
+        if not path.is_absolute() or re.search(r'%[^%]+%', expanded):
+            raise ValueError
+        return path.resolve()
+    try:
+        import winreg
+        paths = set()
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
+                            r'SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList') as profiles:
+            directory, _ = winreg.QueryValueEx(profiles, 'ProfilesDirectory')
+            paths.add(profile_path(directory))
+            count, _, _ = winreg.QueryInfoKey(profiles)
+            for index in range(count):
+                with winreg.OpenKey(profiles, winreg.EnumKey(profiles, index)) as profile:
+                    image, _ = winreg.QueryValueEx(profile, 'ProfileImagePath')
+                    paths.add(profile_path(image))
+        if not paths or any(not path.is_absolute() for path in paths):
+            raise ValueError
+        return paths
+    except (OSError, ValueError, TypeError):
+        raise ConfigurationError('cleanup', 'Não foi possível verificar os diretórios de perfis protegidos.') from None
 
 
 def _absolute_path(value: object, field: str) -> Path:
