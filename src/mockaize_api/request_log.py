@@ -17,7 +17,7 @@ class RequestLog:
     def write(self, **values) -> None:
         allowed = {'requestId', 'method', 'route', 'status', 'durationMs', 'code', 'fileId',
                    'sourceRevision', 'composition', 'files', 'residue',
-                   'responseTraceId', 'replayOfTraceId'}
+                   'responseTraceId', 'replayOfTraceId', 'event', 'authenticated', 'authMethod'}
         now = datetime.now().astimezone()
         entry = {key: value for key, value in values.items() if key in allowed}
         if 'files' in entry:

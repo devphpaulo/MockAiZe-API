@@ -421,6 +421,98 @@ class HttpTests(unittest.TestCase):
         return [json.loads(line) for path in (self.root / 'logs').glob('*.txt')
                 for line in path.read_text(encoding='utf-8').splitlines()]
 
+    def login(self):
+        response = self.call('POST', '/api/v1/auth/token', {})
+        self.assertEqual(response[0], 200, response[2])
+        return json.loads(response[2])['access_token']
+
+    def test_login_bearer_and_authentication_event_have_no_identity_or_secret(self):
+        original_files = set(self.root.iterdir())
+        original_credentials = (self.root / 'credentials.json').read_bytes()
+        token = self.login()
+        self.assertEqual(set(self.root.iterdir()), original_files)
+        self.assertEqual((self.root / 'credentials.json').read_bytes(), original_credentials)
+        response = self.call('GET', '/api/v1/files/xml',
+                             headers={'Authorization': 'Bearer ' + token}, authenticated=False)
+        self.assertEqual(response[0], 200, response[2])
+        entries = self.log_entries()
+        login = next(entry for entry in entries if entry.get('event') == 'LOGIN_SUCCESS')
+        self.assertEqual(login['route'], '/api/v1/auth/token')
+        self.assertTrue(login['authenticated'])
+        self.assertEqual(login['authMethod'], 'apiKey')
+        self.assertTrue(entries[-1]['authenticated'])
+        self.assertEqual(entries[-1]['authMethod'], 'bearer')
+        logs = json.dumps(entries)
+        self.assertNotIn(token, logs)
+        self.assertNotIn(self.key, logs)
+        self.assertNotIn('access_token', logs)
+        self.assertNotIn('user', logs)
+
+    def test_optional_auth_allows_absence_but_never_downgrades_bad_credentials(self):
+        from dataclasses import replace
+        from mockaize_api.config import Authentication
+        self.server.application.config = replace(self.server.application.config,
+                                                 authentication=Authentication(required=False))
+        self.assertEqual(self.call('GET', '/api/v1/files/xml', authenticated=False)[0], 200)
+        self.assertEqual(self.log_entries()[-1]['authMethod'], 'none')
+        self.assertFalse(self.log_entries()[-1]['authenticated'])
+        self.assert_envelope(self.call('GET', '/api/v1/files/xml', headers={'X-API-Key': 'wrong'}), 401)
+        self.assert_envelope(self.call('GET', '/api/v1/files/xml', authenticated=False,
+                                      headers={'Authorization': 'Bearer invalid'}), 401)
+        self.assert_envelope(self.call('POST', '/api/v1/auth/token', {}, authenticated=False), 401)
+        self.assert_envelope(self.call('GET', '/api/v1/files/xml', headers={'Authorization': 'Bearer x'}), 400)
+        self.assertEqual(self.call('GET', '/health', authenticated=False)[0], 200)
+        self.assertEqual(self.call('GET', '/', authenticated=False)[0], 200)
+
+    def test_login_rejects_body_fields_bearer_duplicate_headers_and_oversize_body(self):
+        token = self.login()
+        for body in ([], None, {'username': 'PRIVATE'}, {'refresh_token': token}):
+            response = self.call('POST', '/api/v1/auth/token', body,
+                                 headers={'Content-Type': 'application/json'})
+            self.assertEqual(response[0], 400, response[2])
+        self.assert_envelope(self.call('POST', '/api/v1/auth/token', {}, authenticated=False,
+                                      headers={'Authorization': 'Bearer ' + token}), 401)
+        self.assert_envelope(self.call('POST', '/api/v1/auth/token', {'large': 'x' * 4096}), 413)
+        self.assert_envelope(self.call('GET', '/api/v1/auth/token'), 405)
+        for name, values in [('X-API-Key', [self.key, self.key]),
+                             ('Authorization', ['Bearer ' + token, 'Bearer ' + token])]:
+            connection = HTTPConnection(*self.server.server_address, timeout=5)
+            try:
+                connection.putrequest('GET', '/api/v1/files/xml')
+                for value in values:
+                    connection.putheader(name, value)
+                connection.endheaders()
+                response = connection.getresponse()
+                self.assertEqual(response.status, 400, response.read())
+            finally:
+                connection.close()
+
+    def test_bearer_expiry_restart_rotation_and_replay_use_current_authentication(self):
+        app = self.server.application
+        now = [1000.0]
+        app.auth.clock = lambda: now[0]
+        token = self.login()
+        payload = {'recordCount': 1, 'expectedRevision': 999}
+        route = '/api/v1/files/xml/file-1/new'
+        original = self.call('POST', route, payload, {'Idempotency-Key': 'auth-replay'})
+        replay = self.call('POST', route, payload, {'Idempotency-Key': 'auth-replay',
+                           'Authorization': 'Bearer ' + token}, authenticated=False)
+        self.assertEqual(replay[2], original[2])
+        self.assertEqual(self.log_entries()[-1]['authMethod'], 'bearer')
+        now[0] += 1800
+        self.assert_envelope(self.call('GET', '/api/v1/files/xml', authenticated=False,
+                                      headers={'Authorization': 'Bearer ' + token}), 401)
+        now[0] = 1000.0
+        token = self.login()
+        self.key = create_credentials(self.config_path, rotate=True)
+        self.assert_envelope(self.call('GET', '/api/v1/files/xml', authenticated=False,
+                                      headers={'Authorization': 'Bearer ' + token}), 401)
+        self.assertEqual(self.call('GET', '/api/v1/files/xml')[0], 200)
+        token = self.login()
+        app.auth = type(app.auth)(self.config_path)
+        self.assert_envelope(self.call('GET', '/api/v1/files/xml', authenticated=False,
+                                      headers={'Authorization': 'Bearer ' + token}), 401)
+
     def test_public_error_envelopes_cover_http_status_and_log_correlation(self):
         route = '/api/v1/files/xml/file-1/new'
         responses = [

@@ -24,7 +24,7 @@ from .policy import Policy, ResolvedPolicy
 from .preflight import check_environment, _check_directories, PreflightError
 from .publication import metadata, publish, safe_filename
 from .request_log import RequestLog
-from .security import key_digest, verify_key
+from .security import AuthContext, Authenticator, key_digest
 from .state import State
 
 def _engine_child(channel, operation, variation, body, index, policy):
@@ -171,6 +171,7 @@ class Application:
             self.config, config_path=config_path,
             protected_paths=(Path(sys.executable).resolve().parent, Path(__file__).resolve().parent))
         key_digest(config_path)
+        self.auth = Authenticator(config_path)
         self.catalog = Catalog(self.config.database_path)
         self.catalog.check()
         self.state = State(config_path.parent / 'api-state.sqlite3', self.policy.idempotency_retention_seconds)
@@ -476,15 +477,28 @@ class Handler(BaseHTTPRequestHandler):
             if url.query:
                 raise _invalid()
             return app.health()
+        if path == '/api/v1/auth/token':
+            self.route = path
+            keys = self.headers.get_all('X-API-Key', [])
+            authorizations = self.headers.get_all('Authorization', [])
+            self.auth_context = app.auth.authenticate(keys, authorizations, key_only=True)
+            app.rate_check()
+            if self.command != 'POST':
+                return self._method('POST', request_id)
+            if url.query or self._body(maximum_bytes=4096) != {}:
+                raise _invalid()
+            result = app.auth.issue(keys, authorizations)
+            self.login_success = True
+            return _json(200, result)
         route = re.fullmatch(
             r'/api/v1/files/xml(?:/([A-Za-z0-9_-]{1,128})(?:/(modes|returns|new|return))?)?', path)
         if not route:
             raise ApiError(404, 'ROUTE_NOT_FOUND', 'Rota não encontrada.')
         file_id, action = route.groups()
         self.route = '/api/v1/files/xml' + ('/{fileId}' if file_id else '') + ('/' + action if action else '')
-        keys = self.headers.get_all('X-API-Key', [])
-        if len(keys) != 1 or not verify_key(app.config_path, keys[0]):
-            raise ApiError(401, 'UNAUTHORIZED', 'Chave da API ausente ou inválida.')
+        self.auth_context = app.auth.authenticate(self.headers.get_all('X-API-Key', []),
+                                                  self.headers.get_all('Authorization', []),
+                                                  required=app.config.authentication.required)
         app.rate_check()
         expected = 'POST' if action in ('new', 'return') else 'GET'
         if self.command != expected:
@@ -526,6 +540,8 @@ class Handler(BaseHTTPRequestHandler):
     def _handle(self):
         request_id, started = str(uuid.uuid4()), time.monotonic()
         self.route = 'unmatched'
+        self.auth_context = AuthContext()
+        self.login_success = False
         try:
             response = self._dispatch(request_id)
         except ApiError as error:
@@ -541,6 +557,10 @@ class Handler(BaseHTTPRequestHandler):
         try:
             entry = {'requestId': request_id, 'method': self.command, 'route': self.route,
                      'status': response['status'], 'durationMs': round((time.monotonic() - started) * 1000, 2)}
+            context = getattr(self, 'auth_context', AuthContext())
+            entry.update(authenticated=context.authenticated, authMethod=context.method)
+            if getattr(self, 'login_success', False) and response['status'] == 200:
+                entry['event'] = 'LOGIN_SUCCESS'
             if response['headers'].get('Content-Type', '').startswith('application/json'):
                 payload = json.loads(response['body'])
                 entry.update({key: payload[key] for key in ['fileId', 'sourceRevision', 'composition', 'files'] if key in payload})

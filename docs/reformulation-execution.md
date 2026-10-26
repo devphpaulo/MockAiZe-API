@@ -18,9 +18,9 @@ Referência: pacote `tasks/refinamento/planos-api-site-reformulations`, lido int
 | API-01 | Contrato autorizado | Oliver | Concluída | 168 testes OK, 1 ignorado; Dan sem achados bloqueantes; Luda APROVADO |
 | API-02 | API-01 | Oliver | Concluída | 176 testes OK, 1 ignorado; Dan sem bloqueantes; Luda APROVADO |
 | API-03 | API-01/02 | Ye | Concluída | 190 testes, 189 aprovados e 1 ignorado; ResourceWarning como erro; Dan sem bloqueantes; Luda APROVADO |
-| API-04 | API-01..03 | Oliver | Em execução | Bearer e login |
+| API-04 | API-01..03 | Oliver | Concluída | 201 testes, 200 aprovados e 1 ignorado; Dan sem bloqueantes; Luda APROVADO |
 | API-05 | API-01..04; Site para integração real | Ye | Adiada por orientação do usuário | Ver `Continuar após implementação do site.md` |
-| API-06 | API-01..05 | Ye | Pendente | Limpeza startup e replay |
+| API-06 | API-01..04; XML/OLD adiado pelo usuário | Ye | Em execução | Limpeza startup e replay; proteção do diretório reservado de presets |
 | API-07 | API-01..06 | Oliver | Pendente | Configurador e instalador |
 | API-08 | API-01..07 + SITE-05 | Oliver | Pendente | Documentação e compatibilidade |
 | API-FV | API-08 + SITE-06 | Dan/Luda/Yorke | Pendente | Verificação final e integração |
