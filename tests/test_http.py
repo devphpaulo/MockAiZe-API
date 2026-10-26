@@ -17,6 +17,99 @@ from mockaize_api.security import create_credentials
 
 
 class HttpTests(unittest.TestCase):
+    source_xml = '<Document><Record><Value>example</Value></Record></Document>'
+
+    def configure_limits(self, limits):
+        values = self.server.application.config.to_mapping()
+        values['limits'] = limits
+        save_config(self.config_path, ApiConfig.from_mapping(values))
+        self.server.application = Application(self.config_path)
+
+    def test_return_requires_nonempty_input_and_rejects_file_origin(self):
+        route = '/api/v1/files/xml/file-1/return'
+        base = {'returnSelection': {'type': 'all'}, 'delivery': 'content'}
+        cases = [base, *[dict(base, inputXml=value) for value in ('', '  ', None, 1, True)],
+                 dict(base, inputFilePath='ignored.xml'),
+                 dict(base, inputXml=self.source_xml, inputFilePath='ignored.xml')]
+        for payload in cases:
+            with self.subTest(payload=payload):
+                self.assertEqual(self.call('POST', route, payload)[0], 400)
+
+    def test_custom_and_disabled_records_reach_engine_and_first_checks_total_source(self):
+        source = '<Document>' + '<Record><Value>one</Value></Record>' * 1000 + '</Document>'
+        route = '/api/v1/files/xml/file-1/return'
+        payload = {'returnSelection': {'type': 'all'}, 'inputXml': source,
+                   'inputRecords': 'first', 'delivery': 'content'}
+        status, _, body = self.call('POST', route, payload)
+        self.assertEqual((status, json.loads(body)['error']['code']), (422, 'RECORD_LIMIT_EXCEEDED'))
+        for rule in ({'mode': 'custom', 'count': 1000}, {'mode': 'disabled'}):
+            self.configure_limits({'records': rule})
+            with self.subTest(rule=rule):
+                status, _, body = self.call('POST', '/api/v1/files/xml/file-1/new',
+                                            {'recordCount': 1000, 'delivery': 'content'})
+                self.assertEqual(status, 200, body)
+                self.assertEqual(json.loads(body)['files'][0]['records'], 1000)
+                status, _, body = self.call('POST', route, dict(payload, inputRecords='all', composition='mixed'))
+                self.assertEqual(status, 200, body)
+                self.assertEqual(json.loads(body)['totalRecords'], 2000)
+                if rule['mode'] == 'custom':
+                    self.assertEqual(self.call('POST', '/api/v1/files/xml/file-1/new',
+                                              {'recordCount': 1001})[0], 400)
+                    above = source.replace('</Document>', '<Record><Value>extra</Value></Record></Document>')
+                    status, _, body = self.call('POST', route, dict(payload, inputXml=above))
+                    self.assertEqual((status, json.loads(body)['error']['code']), (422, 'RECORD_LIMIT_EXCEEDED'))
+
+    def test_input_limit_checks_decoded_utf8_with_escaped_body_above_old_12mib_cap(self):
+        source = '<Document><Record><Value>' + '😀' * 1100000 + '</Value></Record></Document>'
+        payload = {'returnSelection': {'type': 'all'}, 'inputXml': source, 'delivery': 'content'}
+        self.assertGreater(len(json.dumps(payload).encode()), 12 * 1024 * 1024)
+        size = len(source.encode('utf-8'))
+        route = '/api/v1/files/xml/file-1/return'
+        self.configure_limits({'inputXml': {'mode': 'custom', 'bytes': size - 1}})
+        self.assertEqual(self.call('POST', route, payload)[0], 413)
+        for rule in ({'mode': 'custom', 'bytes': size}, {'mode': 'disabled'}):
+            self.configure_limits({'inputXml': rule})
+            with self.subTest(rule=rule):
+                status, _, body = self.call('POST', route, payload)
+                self.assertEqual(status, 200, body)
+                self.assertEqual(len(json.loads(body)['files']), 2)
+
+    def test_all_deliveries_have_no_legacy_output_byte_cap(self):
+        document = {'fileName': 'uncapped.xml', 'records': 1, 'content': b'<Document/>'}
+        actual_len = len
+        def measured_size(value):
+            return 100000001 if isinstance(value, bytes) else actual_len(value)
+        with patch('mockaize_api.runtime.len', side_effect=measured_size, create=True), \
+                patch('mockaize_api.runtime.run_engine', return_value=[document]):
+            for delivery in ('directory', 'content', 'inline'):
+                with self.subTest(delivery=delivery):
+                    response = self.server.application.generate('new',
+                        {'fileId': 'file-1', 'recordCount': 1, 'delivery': delivery}, 'uncapped-test', None)
+                    self.assertEqual(response['status'], 200, response['body'])
+
+    def test_catalog_readiness_has_no_http_input_cap_on_saved_models(self):
+        import sqlite3
+        from contextlib import closing
+        with closing(sqlite3.connect(self.root / 'source.sqlite3')) as database, database:
+            config = json.loads(database.execute('SELECT config_json FROM variations').fetchone()[0])
+            large = '<Document><Record><Value>' + 'x' * 2000000 + '</Value></Record></Document>'
+            config['inputByMode']['new']['xml'] = large
+            config['returnModels'][0]['outputXml'] = large
+            database.execute('UPDATE variations SET config_json=?', (json.dumps(config),))
+        status, _, body = self.call('GET', '/api/v1/files/xml/file-1/modes')
+        self.assertEqual(status, 200, body)
+        self.assertTrue(all(item['ready'] for item in json.loads(body)['items']))
+        status, _, body = self.call('GET', '/api/v1/files/xml/file-1/returns')
+        self.assertEqual(status, 200, body)
+        self.assertTrue(all(item['ready'] for item in json.loads(body)['items']))
+
+    def test_invalid_unicode_input_is_a_sanitized_xml_error_with_disabled_limit(self):
+        for rule in ({'mode': 'default'}, {'mode': 'disabled'}):
+            self.configure_limits({'inputXml': rule})
+            status, _, body = self.call('POST', '/api/v1/files/xml/file-1/return',
+                {'returnSelection': {'type': 'all'}, 'inputXml': '<Document>\ud800</Document>'})
+            self.assertEqual((status, json.loads(body)['error']['code']), (422, 'INPUT_XML_INVALID'))
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
@@ -121,9 +214,9 @@ class HttpTests(unittest.TestCase):
         self.assertNotIn('CLIENTE-UM', logs)
         self.assertNotIn('CLIENTE-DOIS', logs)
 
-    def test_return_content_defaults_to_saved_input_and_all_records(self):
+    def test_return_content_uses_explicit_input_and_defaults_to_all_records(self):
         route = '/api/v1/files/xml/file-1/return'
-        payload = {'returnSelection': {'type': 'all'}, 'delivery': 'content'}
+        payload = {'returnSelection': {'type': 'all'}, 'inputXml': self.source_xml, 'delivery': 'content'}
         headers = {'Idempotency-Key': 'return-content'}
         status, _, body = self.call('POST', route, payload, headers)
         self.assertEqual(status, 200, body)
@@ -219,7 +312,7 @@ class HttpTests(unittest.TestCase):
 
     def test_return_apart_directory_and_mixed_inline(self):
         from xml.dom import minidom
-        payload = {'returnSelection': {'type': 'all'}}
+        payload = {'returnSelection': {'type': 'all'}, 'inputXml': self.source_xml}
         status, _, body = self.call('POST', '/api/v1/files/xml/file-1/return', payload)
         self.assertEqual(status, 200, body)
         files = json.loads(body)['files']
@@ -231,14 +324,14 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(status, 200, body)
         self.assertEqual(len(minidom.parseString(body).getElementsByTagName('Record')), 2)
 
-    def test_invalid_structure_publishes_nothing_for_all_input_origins(self):
+    def test_invalid_structure_publishes_nothing_and_file_origin_is_rejected(self):
         payload = {'returnSelection': {'type': 'all'}}
         path = self.root / 'input' / 'entrada.xml'
         path.write_text('<Document><Record><Other/></Record></Document>')
-        for origin in [{'inputXml': path.read_text()}, {'inputFilePath': str(path)}]:
+        for origin, expected in [({'inputXml': path.read_text()}, 422), ({'inputFilePath': str(path)}, 400)]:
             status, _, body = self.call('POST', '/api/v1/files/xml/file-1/return', dict(payload, **origin))
-            self.assertEqual(status, 422, body)
-            self.assertEqual(json.loads(body)['error']['code'], 'INPUT_XML_STRUCTURE_MISMATCH')
+            self.assertEqual(status, expected, body)
+            self.assertEqual(json.loads(body)['error']['code'], 'INPUT_XML_STRUCTURE_MISMATCH' if expected == 422 else 'INVALID_REQUEST')
         self.assertEqual(list((self.root / 'output').iterdir()), [])
 
     def test_body_validation_unknown_fields_null_boolean_and_delivery(self):
@@ -247,10 +340,10 @@ class HttpTests(unittest.TestCase):
                         {'returnSelection': {'type': 'all'}, 'inputXml': None}]:
             operation = 'return' if 'returnSelection' in payload else 'new'
             self.assertEqual(self.call('POST', '/api/v1/files/xml/file-1/' + operation, payload)[0], 400)
-        status, _, _ = self.call('POST', '/api/v1/files/xml/file-1/return', {'returnSelection': {'type': 'all'}, 'delivery': 'inline'})
+        status, _, _ = self.call('POST', '/api/v1/files/xml/file-1/return', {'returnSelection': {'type': 'all'}, 'inputXml': self.source_xml, 'delivery': 'inline'})
         self.assertEqual(status, 422)
         status, _, body = self.call('POST', '/api/v1/files/xml/file-1/return', {
-            'returnSelection': {'type': 'ids', 'ids': ['unknown']}})
+            'returnSelection': {'type': 'ids', 'ids': ['unknown']}, 'inputXml': self.source_xml})
         self.assertEqual(status, 404)
         self.assertEqual(json.loads(body)['error']['code'], 'RETURN_NOT_FOUND')
 
@@ -340,8 +433,8 @@ class HttpTests(unittest.TestCase):
             (self.call('POST', '/api/v1/files/xml/file-1/return',
                        {'returnSelection': {'type': 'all'}, 'inputXml': '<wrong/>'}), 422),
         ]
-        with patch('mockaize_api.runtime.MAX_BODY', 1):
-            responses.append((self.call('POST', route, {'recordCount': 1}), 413))
+        responses.append((self.call('POST', '/api/v1/files/xml/file-1/return',
+                                    {'returnSelection': {'type': 'all'}, 'inputXml': 'x' * 2000001}), 413))
         with patch.object(self.server.application, 'rate_check', side_effect=ApiError(429, 'RATE_LIMITED', 'Aguarde.')):
             response = self.call('GET', '/api/v1/files/xml')
             self.assertEqual(response[1]['Retry-After'], '1')

@@ -9,6 +9,7 @@ from pathlib import Path
 import queue
 import re
 import socket
+import sys
 import threading
 import time
 from urllib.parse import parse_qs, quote, urlsplit
@@ -19,27 +20,22 @@ from .api_docs import DOCUMENTATION_ROUTES, documentation_response
 from .catalog import Catalog
 from .config import load_config
 from .errors import ApiError
-from .inputs import read_input_file
-from .policy import Policy
+from .policy import Policy, ResolvedPolicy
 from .preflight import check_environment, _check_directories, PreflightError
 from .publication import metadata, publish, safe_filename
 from .request_log import RequestLog
 from .security import key_digest, verify_key
 from .state import State
 
-MAX_BODY = 12 * 1024 * 1024
-MAX_OUTPUT = 100_000_000
-
-
-def _engine_child(channel, operation, variation, body, index):
+def _engine_child(channel, operation, variation, body, index, policy):
     try:
         from .xml_engine import generate_new, generate_return
         if operation == 'new':
-            result = generate_new(variation, body['recordCount'], file_index=index)
+            result = generate_new(variation, body['recordCount'], file_index=index, policy=policy)
         else:
             result = generate_return(variation, body['returnSelection'], body.get('composition', 'apart'),
-                                     input_xml=body.get('inputXml'), file_index=index,
-                                     input_records=body.get('inputRecords', 'all'))
+                                     input_xml=body['inputXml'], file_index=index,
+                                     input_records=body.get('inputRecords', 'all'), policy=policy)
         channel.send(('ok', result))
     except ApiError as error:
         channel.send(('error', (error.status, error.code, error.detail, error.extensions)))
@@ -49,10 +45,11 @@ def _engine_child(channel, operation, variation, body, index):
         channel.close()
 
 
-def run_engine(operation, variation, body, index, timeout, stop_event=None):
+def run_engine(operation, variation, body, index, timeout, stop_event=None, policy=None):
     context = multiprocessing.get_context('spawn')
     receiver, sender = context.Pipe(duplex=False)
-    process = context.Process(target=_engine_child, args=(sender, operation, variation, body, index))
+    process = context.Process(target=_engine_child,
+                              args=(sender, operation, variation, body, index, policy or ResolvedPolicy()))
     try:
         process.start()
         sender.close()
@@ -126,9 +123,10 @@ def _nonempty_string(value):
     return isinstance(value, str) and 0 < len(value.strip()) <= 128
 
 
-def validate_generation(operation: str, body: object) -> dict:
+def validate_generation(operation: str, body: object, policy: ResolvedPolicy | None = None) -> dict:
+    policy = policy or ResolvedPolicy()
     common = {'fileId', 'delivery', 'expectedRevision'}
-    extra = {'recordCount'} if operation == 'new' else {'returnSelection', 'composition', 'inputXml', 'inputFilePath', 'inputRecords'}
+    extra = {'recordCount'} if operation == 'new' else {'returnSelection', 'composition', 'inputXml', 'inputRecords'}
     if not isinstance(body, dict) or set(body) - common - extra or not _nonempty_string(body.get('fileId')):
         raise _invalid()
     if body.get('delivery', 'directory') not in ('directory', 'content', 'inline'):
@@ -137,18 +135,21 @@ def validate_generation(operation: str, body: object) -> dict:
         raise _invalid()
     if operation == 'new':
         count = body.get('recordCount')
-        if type(count) is not int or not 1 <= count <= 500:
+        if type(count) is not int or count < 1 or (policy.record_count is not None and count > policy.record_count):
             raise _invalid()
         return body
     if body.get('composition', 'apart') not in ('apart', 'mixed'):
         raise _invalid()
     if body.get('inputRecords', 'all') not in ('all', 'first'):
         raise _invalid()
-    if 'inputXml' in body and 'inputFilePath' in body:
+    if not isinstance(body.get('inputXml'), str) or not body['inputXml'].strip():
         raise _invalid()
-    for key in ['inputXml', 'inputFilePath']:
-        if key in body and (not isinstance(body[key], str) or not body[key].strip()):
-            raise _invalid()
+    try:
+        input_size = len(body['inputXml'].encode('utf-8'))
+    except UnicodeError:
+        raise ApiError(422, 'INPUT_XML_INVALID', 'XML contém caracteres Unicode inválidos.') from None
+    if policy.input_xml_bytes is not None and input_size > policy.input_xml_bytes:
+        raise ApiError(413, 'INPUT_TOO_LARGE', 'O XML de entrada excede o limite configurado.')
     selection = body.get('returnSelection')
     if not isinstance(selection, dict):
         raise _invalid()
@@ -166,7 +167,9 @@ class Application:
     def __init__(self, config_path: Path):
         self.config_path = config_path
         self.config = load_config(config_path)
-        self.policy = Policy.load(config_path)
+        self.policy = Policy.load(config_path).resolve(
+            self.config, config_path=config_path,
+            protected_paths=(Path(sys.executable).resolve().parent, Path(__file__).resolve().parent))
         key_digest(config_path)
         self.catalog = Catalog(self.config.database_path)
         self.catalog.check()
@@ -203,7 +206,7 @@ class Application:
             return _json(503, {'status': 'unavailable', 'version': __version__})
 
     def generate(self, operation: str, body: dict, request_id: str, idempotency_key: str | None):
-        body = validate_generation(operation, body)
+        body = validate_generation(operation, body, self.policy)
         if self.stop_event.is_set():
             raise ApiError(503, 'SERVICE_STOPPING', 'O serviço está encerrando.')
         if idempotency_key is not None and (not _nonempty_string(idempotency_key) or any(ord(c) < 33 or ord(c) > 126 for c in idempotency_key)):
@@ -224,11 +227,6 @@ class Application:
             variation = self.catalog.snapshot(body['fileId'])
             if 'expectedRevision' in body and body['expectedRevision'] != variation['revision']:
                 raise ApiError(409, 'REVISION_MISMATCH', 'A revisão salva difere da revisão solicitada.')
-            execution_body = dict(body)
-            if 'inputFilePath' in body:
-                execution_body['inputXml'] = read_input_file(self.config.input_directory, body['inputFilePath'])
-            if operation == 'return' and 'inputXml' in execution_body and len(execution_body['inputXml'].encode('utf-8')) > 2_000_000:
-                raise ApiError(413, 'INPUT_TOO_LARGE', 'O XML de entrada excede 2 MB.')
             if (operation == 'return' and body.get('delivery', 'directory') == 'inline'
                     and body.get('composition', 'apart') == 'apart'):
                 selection = body['returnSelection']
@@ -236,9 +234,10 @@ class Application:
                 if count != 1:
                     raise ApiError(422, 'DELIVERY_INCOMPATIBLE', 'Entrega inline exige exatamente um XML final.')
             index = self.state.next_index(body['fileId'])
-            documents = run_engine(operation, variation, execution_body, index, self.policy.generation_timeout_seconds, self.stop_event)
-            if not documents or sum(len(item['content']) for item in documents) > MAX_OUTPUT:
-                raise ApiError(413, 'OUTPUT_LIMIT_EXCEEDED', 'O resultado excede 100 MB.')
+            documents = run_engine(operation, variation, body, index, self.policy.generation_timeout_seconds,
+                                   self.stop_event, self.policy)
+            if not documents:
+                raise ApiError(500, 'INTERNAL_ERROR', 'A geração não produziu documentos.')
             if body.get('delivery', 'directory') == 'inline':
                 if len(documents) != 1:
                     raise ApiError(422, 'DELIVERY_INCOMPATIBLE', 'Entrega inline exige exatamente um XML final.')
@@ -275,8 +274,6 @@ class Application:
                         value['totalRecords'] = documents[0]['records']
                         value['recordsPerReturn'] = value['totalRecords'] // len(ids)
                 response = _json(200, value)
-                if delivery == 'content' and len(response['body']) > MAX_OUTPUT:
-                    raise ApiError(413, 'OUTPUT_LIMIT_EXCEEDED', 'A resposta JSON excede 100 MB. Reduza a geração ou use delivery=directory.')
         except ApiError as error:
             response = _problem(error, request_id)
             if error.extensions.get('residue'):
@@ -431,7 +428,7 @@ class Handler(BaseHTTPRequestHandler):
                                      'Não foi possível processar a requisição HTTP.'), request_id)
         self._respond(response, request_id, time.monotonic())
 
-    def _body(self):
+    def _body(self, maximum_bytes=None):
         if self.headers.get_content_type() != 'application/json':
             raise ApiError(415, 'UNSUPPORTED_MEDIA_TYPE', 'Envie application/json.')
         lengths = self.headers.get_all('Content-Length', [])
@@ -443,7 +440,7 @@ class Handler(BaseHTTPRequestHandler):
             raise _invalid() from None
         if size < 0:
             raise _invalid()
-        if size > MAX_BODY:
+        if maximum_bytes is not None and size > maximum_bytes:
             raise ApiError(413, 'INPUT_TOO_LARGE', 'Corpo da requisição excede o limite.')
         content = self.rfile.read(size)
         if len(content) != size:

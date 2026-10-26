@@ -11,9 +11,9 @@ from xml.sax.saxutils import quoteattr
 
 from .errors import ApiError
 from .formulas import check_length, evaluate, filename
+from .policy import ResolvedPolicy
 
 INPUT_LIMIT = 2_000_000
-OUTPUT_LIMIT = 100_000_000
 XMLNS = 'http://www.w3.org/2000/xmlns/'
 XML_SPACE = 'http://www.w3.org/XML/1998/namespace'
 
@@ -21,8 +21,12 @@ XML_SPACE = 'http://www.w3.org/XML/1998/namespace'
 def parse(xml, code='INPUT_XML_INVALID', limit=INPUT_LIMIT):
     if not isinstance(xml,str) or not xml.strip():
         raise ApiError(422,code,'XML ausente ou inválido.')
-    if len(xml.encode('utf-8'))>limit:
-        if code=='INPUT_XML_INVALID':raise ApiError(413,'INPUT_TOO_LARGE','XML de entrada excede 2 MB.')
+    try:
+        encoded=xml.encode('utf-8')
+    except UnicodeError:
+        raise ApiError(422,code,'XML contém caracteres Unicode inválidos.') from None
+    if limit is not None and len(encoded)>limit:
+        if code=='INPUT_XML_INVALID':raise ApiError(413,'INPUT_TOO_LARGE','XML de entrada excede o limite configurado.')
         raise ApiError(422,code,'XML salvo excede o limite permitido.')
     if re.search(r'<!\s*(?:DOCTYPE|ENTITY)',xml,re.I):
         raise ApiError(422,code,'DOCTYPE e entidades externas não são aceitos.')
@@ -186,9 +190,8 @@ def serialize(doc):
     # CDATA and subtrees marked with xml:space="preserve".
     body='\n'.join(_serialize_node(n) for n in doc.childNodes if n.nodeType!=Node.TEXT_NODE or n.data.strip())
     content=('<?xml version="1.0" encoding="UTF-8"?>\n'+body+'\n').encode('utf-8')
-    if len(content)>OUTPUT_LIMIT:raise ApiError(413,'OUTPUT_LIMIT_EXCEEDED','Saída excede 100 MB.')
     # Generated literals may contain XML-invalid control characters.
-    parse(content.decode('utf-8'),'CONFIGURATION_INVALID',OUTPUT_LIMIT)
+    parse(content.decode('utf-8'),'CONFIGURATION_INVALID',None)
     return content
 
 
@@ -212,18 +215,20 @@ def _envelope_signature(doc,group,with_values=False):
     return walk(doc.documentElement)
 
 
-def validate_return_input(template_xml,group,input_xml):
-    template=parse(template_xml,'RETURN_INPUT_TEMPLATE_NOT_READY')
+def validate_return_input(template_xml,group,input_xml,policy=None):
+    policy=policy or ResolvedPolicy()
+    template=parse(template_xml,'RETURN_INPUT_TEMPLATE_NOT_READY',None)
     try:expected=records(template,group)
     except (ValueError,TypeError,KeyError) as exc:raise ApiError(422,'RETURN_INPUT_TEMPLATE_NOT_READY','Unidade de entrada não configurada.') from exc
     if not expected:raise ApiError(422,'RETURN_INPUT_TEMPLATE_NOT_READY','Unidade de entrada não encontrada.')
-    doc=parse(input_xml)
+    doc=parse(input_xml,limit=policy.input_xml_bytes)
     try:actual=records(doc,group)
     except (ValueError,TypeError,KeyError) as exc:raise ApiError(422,'INPUT_XML_STRUCTURE_MISMATCH','Estrutura de entrada divergente.') from exc
     expected_signature=signature(expected[0])
     if not actual or any(signature(n)!=expected_signature for n in expected+actual) or _envelope_signature(template,group)!=_envelope_signature(doc,group):
         raise ApiError(422,'INPUT_XML_STRUCTURE_MISMATCH','Tags, atributos, namespaces ou ordem dos registros divergem do modelo salvo.')
-    if len(actual)>500:raise ApiError(422,'RECORD_LIMIT_EXCEEDED','O retorno aceita até 500 registros de entrada.')
+    if policy.record_count is not None and len(actual)>policy.record_count:
+        raise ApiError(422,'RECORD_LIMIT_EXCEEDED','O retorno excede o limite configurado de registros de entrada.')
     return doc
 
 
@@ -270,8 +275,9 @@ def _replace_records(doc,group,count):
     return key(inserted[0]),wrapper
 
 
-def _generate(config,mode,count,source_xml,input_group,template_xml,output_group,rules,presence,headers,name_formula,file_index):
-    source=parse(source_xml,'CONFIGURATION_INVALID');template=parse(template_xml,'CONFIGURATION_INVALID')
+def _generate(config,mode,count,source_xml,input_group,template_xml,output_group,rules,presence,headers,name_formula,file_index,source_document=None):
+    source=source_document if source_document is not None else parse(source_xml,'CONFIGURATION_INVALID',None)
+    template=parse(template_xml,'CONFIGURATION_INVALID',None)
     units=records(template,output_group)
     if not units:raise ValueError('Unidade de saída não encontrada.')
     for header_path in headers:
@@ -288,14 +294,11 @@ def _generate(config,mode,count,source_xml,input_group,template_xml,output_group
         if resolve(template,path) is None:raise ValueError('Presença sem campo: '+path)
         if policy.get('requirement')=='optional' and (policy.get('include') is False or policy.get('distribution')=='alternate') and has_prefix(parts(output_group),parts(path)):
             raise ValueError('Raiz e caminho da unidade devem permanecer presentes.')
-    estimated=len(template_xml.encode('utf-8'))+len(units[0].toxml().encode('utf-8'))*count
-    if estimated>OUTPUT_LIMIT:raise ApiError(413,'OUTPUT_LIMIT_EXCEEDED','Saída estimada excede 100 MB.')
     doc=template.cloneNode(True);actual_group,wrapper=_replace_records(doc,output_group,count)
     def actual(path,index=0):return reindex(wrapper+parts(path),actual_group,index)
     context={'referenceDateTime':config.get('referenceDateTime') or datetime.now(timezone.utc).isoformat(),'timeZone':config.get('timeZone') or 'America/Fortaleza','baseDate':config.get('baseDate'),'configName':config.get('name','mock'),'fileIndex':file_index,'count':count}
-    jobs={};policies=[];evaluated_bytes=0
+    jobs={};policies=[]
     def evaluate_target(target):
-        nonlocal evaluated_bytes
         if not connected(doc,target):raise ValueError('Campo de saída ausente ou omitido.')
         if target not in jobs:return value(target)
         job=jobs[target]
@@ -306,8 +309,6 @@ def _generate(config,mode,count,source_xml,input_group,template_xml,output_group
             ctx={**ctx,'sourceValue':lambda p:check_length(job['context']['sourceValue'](p),rule['exactLength'],True),'groupValues':lambda f:[check_length(v,rule['exactLength'],True) for v in job['context']['groupValues'](f)] if f.get('source')=='input' else job['context']['groupValues'](f)}
         result=str(rule['fixed']) if rule.get('fixed') is not None else evaluate(rule['generator'],ctx) if rule.get('generator') else value(target)
         if rule.get('lengthTarget')!='input':result=check_length(result,rule.get('exactLength'),rule.get('lengthTarget')=='output')
-        evaluated_bytes+=len(result.encode('utf-8'))
-        if evaluated_bytes>OUTPUT_LIMIT:raise ApiError(413,'OUTPUT_LIMIT_EXCEEDED','Valores gerados excedem 100 MB.')
         set_value(target,result);job.update(status='done',value=result)
         return result
     # All jobs are registered before evaluation so forward references and all-record sums work.
@@ -342,8 +343,10 @@ def _input(config,mode):
     return saved.get('xml') or '',saved.get('group') or ''
 
 
-def generate_new(variation,record_count,file_index=0):
-    if isinstance(record_count,bool) or not isinstance(record_count,int) or not 1<=record_count<=500:raise ApiError(422,'VALIDATION_ERROR','recordCount deve ser um inteiro entre 1 e 500.')
+def generate_new(variation,record_count,file_index=0,policy=None):
+    policy=policy or ResolvedPolicy()
+    if type(record_count) is not int or record_count<1 or (policy.record_count is not None and record_count>policy.record_count):
+        raise ApiError(422,'VALIDATION_ERROR','recordCount deve ser um inteiro positivo dentro do limite configurado.')
     try:
         config=copy.deepcopy(variation['config']);config['name']=variation.get('name','mock');source,group=_input(config,'new')
         if not source or not group:raise ApiError(422,'NEW_TEMPLATE_NOT_READY','Modelo de Novo não está pronto.')
@@ -371,22 +374,23 @@ def _select(config,selection):
     return selected
 
 
-def generate_return(variation,selection,composition='apart',input_xml=None,file_index=0,input_records='all'):
+def generate_return(variation,selection,composition='apart',input_xml=None,file_index=0,input_records='all',policy=None):
+    policy=policy or ResolvedPolicy()
+    if not isinstance(input_xml,str) or not input_xml.strip():
+        raise ApiError(400,'INVALID_REQUEST','Informe inputXml como uma string não vazia.')
     try:
         if composition not in ('apart','mixed'):raise ValueError('Composição inválida.')
         if input_records not in ('all','first'):raise ValueError('Seleção de registros de entrada inválida.')
         config=copy.deepcopy(variation['config']);config['name']=variation.get('name','mock');template,group=_input(config,'return')
         if not template or not group:raise ApiError(422,'RETURN_INPUT_TEMPLATE_NOT_READY','Modelo de entrada de Retorno não está pronto.')
-        source=template if input_xml is None else input_xml;doc=validate_return_input(template,group,source)
+        source=input_xml;doc=validate_return_input(template,group,source,policy)
         if input_records=='first':
             for node in records(doc,group)[1:]:remove(node)
-            source=doc.toxml()
         count=len(records(doc,group));selected=_select(config,selection)
-        generated=[];total=0
+        generated=[]
         for model in selected:
-            item,output,output_group=_generate(config,'return',count,source,group,model['outputXml'],model['outputGroup'],model.get('rules',{}),model.get('presence',{}),model.get('headers',[]),model.get('filename') or {'type':'literal','value':model['name']},file_index)
-            item.update(returnId=model['id'],returnName=model['name']);generated.append((item,output,output_group));total+=len(item['content'])
-            if total>OUTPUT_LIMIT:raise ApiError(413,'OUTPUT_LIMIT_EXCEEDED','Saída total excede 100 MB.')
+            item,output,output_group=_generate(config,'return',count,source,group,model['outputXml'],model['outputGroup'],model.get('rules',{}),model.get('presence',{}),model.get('headers',[]),model.get('filename') or {'type':'literal','value':model['name']},file_index,source_document=doc)
+            item.update(returnId=model['id'],returnName=model['name']);generated.append((item,output,output_group))
         if composition=='apart':return [item for item,_,_ in generated]
         first,base,base_group=generated[0];base_units=records(base,base_group)
         envelope=_envelope_signature(base,base_group,True);record_signatures=[signature(n) for n in base_units]

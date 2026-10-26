@@ -33,7 +33,7 @@ def _template_ready(xml, group):
     """Resolve the Studio JSON path, including namespaces and sibling indexes."""
     if not isinstance(xml, str) or not isinstance(group, str):
         return False
-    if len(xml.encode('utf-8')) > 2_000_000 or re.search(r'<!\s*(?:DOCTYPE|ENTITY)', xml, re.I):
+    if re.search(r'<!\s*(?:DOCTYPE|ENTITY)', xml, re.I):
         return False
     try:
         root, parts = ET.fromstring(xml), json.loads(group)

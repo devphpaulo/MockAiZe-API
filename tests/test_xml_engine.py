@@ -3,6 +3,7 @@ import unittest
 from xml.dom import minidom
 from mockaize_api.errors import ApiError
 from mockaize_api.xml_engine import generate_new, generate_return, validate_return_input
+from mockaize_api.policy import ResolvedPolicy
 
 
 def path(*names):
@@ -21,6 +22,75 @@ def variation():
 
 
 class EngineTests(unittest.TestCase):
+    def test_return_requires_explicit_nonempty_input_without_saved_fallback(self):
+        for source in (None, '', '  ', False, 2):
+            with self.subTest(source=source), self.assertRaises(ApiError) as caught:
+                generate_return(variation(), {'type': 'all'}, input_xml=source)
+            self.assertEqual(caught.exception.code, 'INVALID_REQUEST')
+
+    def test_custom_and_disabled_record_limits_allow_1000_and_limit_full_source_before_first(self):
+        source = '<root>' + '<r><a>9</a></r>' * 1000 + '</root>'
+        for maximum in (1000, None):
+            policy = ResolvedPolicy(record_count=maximum)
+            with self.subTest(maximum=maximum):
+                self.assertEqual(generate_new(variation(), 1000, policy=policy)[0]['records'], 1000)
+                self.assertEqual(generate_return(variation(), {'type': 'all'}, input_xml=source,
+                                                 policy=policy)[0]['records'], 1000)
+        with self.assertRaises(ApiError) as caught:
+            generate_return(variation(), {'type': 'all'}, input_xml=source, input_records='first')
+        self.assertEqual(caught.exception.code, 'RECORD_LIMIT_EXCEEDED')
+        with self.assertRaises(ApiError) as caught:
+            generate_new(variation(), 1001, policy=ResolvedPolicy(record_count=1000))
+        self.assertEqual(caught.exception.code, 'VALIDATION_ERROR')
+        with self.assertRaises(ApiError) as caught:
+            generate_return(variation(), {'type': 'all'}, input_xml=source, input_records='first',
+                            policy=ResolvedPolicy(record_count=999))
+        self.assertEqual(caught.exception.code, 'RECORD_LIMIT_EXCEEDED')
+
+    def test_input_policy_counts_utf8_bytes_inclusive_boundary_and_disabled(self):
+        source = '<root><r><a>éé</a></r></root>'
+        size = len(source.encode('utf-8'))
+        for maximum in (size, None):
+            policy = ResolvedPolicy(input_xml_bytes=maximum)
+            self.assertEqual(generate_return(variation(), {'type': 'all'}, input_xml=source,
+                                             input_records='first', policy=policy)[0]['records'], 1)
+        with self.assertRaises(ApiError) as caught:
+            generate_return(variation(), {'type': 'all'}, input_xml=source,
+                            policy=ResolvedPolicy(input_xml_bytes=size - 1))
+        self.assertEqual((caught.exception.status, caught.exception.code), (413, 'INPUT_TOO_LARGE'))
+
+    def test_mixed_models_multiply_records_without_new_aggregate_record_limit(self):
+        import copy
+        v = variation()
+        second = copy.deepcopy(v['config']['returnModels'][0])
+        second.update(id='B', name='Second')
+        v['config']['returnModels'].append(second)
+        source = '<root><r><a>1</a></r><r><a>2</a></r></root>'
+        result = generate_return(v, {'type': 'all'}, 'mixed', source,
+                                 policy=ResolvedPolicy(record_count=2))[0]
+        self.assertEqual(result['records'], 4)
+
+    def test_saved_templates_do_not_inherit_request_input_byte_limit(self):
+        v = variation()
+        v['config']['inputByMode']['new']['xml'] = '<root><header>' + 'x' * 2000000 + '</header><r><a>1</a><b>2</b></r></root>'
+        result = generate_new(v, 1, policy=ResolvedPolicy(input_xml_bytes=1))[0]
+        self.assertEqual(result['records'], 1)
+
+    def test_disabled_input_size_does_not_disable_safe_parser_or_depth(self):
+        policy = ResolvedPolicy(input_xml_bytes=None, record_count=None)
+        for source in ('<!DOCTYPE root [<!ENTITY x "value">]><root><r><a>&x;</a></r></root>',
+                       '<a>' * 130 + '</a>' * 130, '<root>'):
+            with self.subTest(source=source[:40]), self.assertRaises(ApiError) as caught:
+                generate_return(variation(), {'type': 'all'}, input_xml=source, policy=policy)
+            self.assertEqual(caught.exception.code, 'INPUT_XML_INVALID')
+
+    def test_invalid_unicode_stays_a_controlled_xml_error_with_any_size_policy(self):
+        for maximum in (2000000, None):
+            with self.subTest(maximum=maximum), self.assertRaises(ApiError) as caught:
+                generate_return(variation(), {'type': 'all'}, input_xml='<root>\ud800</root>',
+                                policy=ResolvedPolicy(input_xml_bytes=maximum))
+            self.assertEqual((caught.exception.status, caught.exception.code), (422, 'INPUT_XML_INVALID'))
+
     def test_new_uses_requested_count_and_preserves_header(self):
         result = generate_new(variation(), 3)[0]
         doc = minidom.parseString(result['content'])
@@ -37,12 +107,10 @@ class EngineTests(unittest.TestCase):
         v = variation()
         source = '<root><r><a>9</a></r><r><a>8</a></r></root>'
         v['config']['inputByMode']['return']['xml'] = source
-        for input_xml in (source, None):
-            with self.subTest(origin='saved' if input_xml is None else 'request'):
-                result = generate_return(v, {'type': 'all'}, input_xml=input_xml, input_records='first')[0]
-                self.assertEqual(result['records'], 1)
-                doc = minidom.parseString(result['content'])
-                self.assertEqual([node.firstChild.data for node in doc.getElementsByTagName('a')], ['9'])
+        result = generate_return(v, {'type': 'all'}, input_xml=source, input_records='first')[0]
+        self.assertEqual(result['records'], 1)
+        doc = minidom.parseString(result['content'])
+        self.assertEqual([node.firstChild.data for node in doc.getElementsByTagName('a')], ['9'])
 
     def test_first_record_selection_still_validates_the_whole_input(self):
         with self.assertRaises(ApiError) as caught:
@@ -77,7 +145,7 @@ class EngineTests(unittest.TestCase):
     def test_mixed_rejects_incompatible_envelope(self):
         import copy
         v=variation(); model=copy.deepcopy(v['config']['returnModels'][0]); model.update(id='B',rules={},outputXml='<different><r><a>A</a></r></different>',outputGroup=path('different','r'));v['config']['returnModels'].append(model)
-        with self.assertRaises(ApiError) as caught: generate_return(v, {'type':'all'}, 'mixed')
+        with self.assertRaises(ApiError) as caught: generate_return(v, {'type':'all'}, 'mixed', v['config']['inputByMode']['return']['xml'])
         self.assertEqual('RETURN_MODELS_INCOMPATIBLE',caught.exception.code)
 
     def test_new_count_limits_include_500_and_reject_boolean(self):
@@ -118,9 +186,9 @@ class EngineTests(unittest.TestCase):
         xml='<root><r><item><a>0.1</a></item><item><a>0.2</a></item></r><r><item><a>0.3</a></item><item><a>0.4</a></item></r></root>'
         v['config']['inputByMode']['return']={'xml':xml,'group':group}
         model=v['config']['returnModels'][0];model['rules']={path('out','r','a'):{'generator':{'type':'groupSum','source':'input','group':item,'path':field}}}
-        content=generate_return(v,{'type':'all'})[0]['content'];self.assertIn(b'<a>0.3</a>',content);self.assertIn(b'<a>0.7</a>',content)
+        content=generate_return(v,{'type':'all'},input_xml=xml)[0]['content'];self.assertIn(b'<a>0.3</a>',content);self.assertIn(b'<a>0.7</a>',content)
         model['rules'][path('out','r','a')]['generator']['allRecords']=True
-        content=generate_return(v,{'type':'all'})[0]['content'];self.assertEqual(2,content.count(b'<a>1</a>'))
+        content=generate_return(v,{'type':'all'},input_xml=xml)[0]['content'];self.assertEqual(2,content.count(b'<a>1</a>'))
 
     def test_optional_alternate_and_required_empty(self):
         v=variation();v['config']['presenceByMode']={'new':{path('root','r','b'):{'requirement':'optional','include':True,'distribution':'alternate'}}}
@@ -153,31 +221,35 @@ class EngineTests(unittest.TestCase):
 
     def test_selection_duplicates_unknown_and_incomplete_fail(self):
         for selection in [{'type':'ids','ids':['A','A']},{'type':'ids','ids':['B']},{'type':'ids','ids':[]}]:
-            with self.subTest(selection=selection),self.assertRaises(ApiError):generate_return(variation(),selection)
+            with self.subTest(selection=selection),self.assertRaises(ApiError):generate_return(variation(),selection,input_xml=variation()['config']['inputByMode']['return']['xml'])
         v=variation();v['config']['returnModels'][0]['outputXml']=''
-        with self.assertRaises(ApiError):generate_return(v,{'type':'all'})
+        with self.assertRaises(ApiError):generate_return(v,{'type':'all'},input_xml=v['config']['inputByMode']['return']['xml'])
 
     def test_input_byte_size_depth_and_invalid_xml_fail(self):
         for xml in ['<root>','<root>'+('é'*1_000_000)+'</root>','<a>'*130+'</a>'*130]:
             with self.subTest(size=len(xml)),self.assertRaises(ApiError):validate_return_input('<root><r><a/></r></root>',path('root','r'),xml)
 
-    def test_output_limit_applies_before_publication(self):
+    def test_legacy_output_limit_does_not_apply_to_generation_or_serialization(self):
         from unittest.mock import patch
-        with patch('mockaize_api.xml_engine.OUTPUT_LIMIT',100):
-            with self.assertRaises(ApiError) as caught:generate_new(variation(),10)
-            self.assertEqual('OUTPUT_LIMIT_EXCEEDED',caught.exception.code)
+        actual_len = len
+        def measured_size(value):
+            return 100000001 if isinstance(value, bytes) and value.startswith(b'<?xml') else actual_len(value)
+        with patch('mockaize_api.xml_engine.len',side_effect=measured_size,create=True):
+            self.assertEqual(generate_new(variation(),10)[0]['records'],10)
+            result=generate_return(variation(),{'type':'all'},input_xml=variation()['config']['inputByMode']['return']['xml'])
+            self.assertEqual(result[0]['records'],1)
 
     def test_selected_order_overrides_saved_order(self):
         import copy
         v=variation();model=copy.deepcopy(v['config']['returnModels'][0]);model.update(id='B',name='B');v['config']['returnModels'].append(model)
-        self.assertEqual(['B','A'],[i['returnId'] for i in generate_return(v,{'type':'ids','ids':['B','A']})])
+        self.assertEqual(['B','A'],[i['returnId'] for i in generate_return(v,{'type':'ids','ids':['B','A']},input_xml=v['config']['inputByMode']['return']['xml'])])
 
     def test_mixed_rejects_different_header_value_and_record_shape(self):
         import copy
         for output in ['<out><h>B</h><r><a>A</a></r></out>','<out><h>A</h><r><b>A</b></r></out>']:
             v=variation();first=v['config']['returnModels'][0];first['outputXml']='<out><h>A</h><r><a>A</a></r></out>'
             second=copy.deepcopy(first);second.update(id='B',rules={},outputXml=output);v['config']['returnModels'].append(second)
-            with self.subTest(output=output),self.assertRaises(ApiError) as caught:generate_return(v,{'type':'all'},'mixed')
+            with self.subTest(output=output),self.assertRaises(ApiError) as caught:generate_return(v,{'type':'all'},'mixed',v['config']['inputByMode']['return']['xml'])
             self.assertEqual('RETURN_MODELS_INCOMPATIBLE',caught.exception.code)
 
     def test_record_count_cannot_move_units_across_footer(self):
@@ -196,16 +268,12 @@ class EngineTests(unittest.TestCase):
         with self.assertRaises(ApiError) as caught:generate_new(v,1)
         self.assertNotIn('PRIVATE-FORMULA-VALUE',caught.exception.detail)
         model=v['config']['returnModels'][0];model['rules']={path('out','r','a'):{'generator':{'type':'sequence','start':'PRIVATE-RETURN-VALUE'}}}
-        with self.assertRaises(ApiError) as caught:generate_return(v,{'type':'all'})
+        with self.assertRaises(ApiError) as caught:generate_return(v,{'type':'all'},input_xml=v['config']['inputByMode']['return']['xml'])
         self.assertNotIn('PRIVATE-RETURN-VALUE',caught.exception.detail)
 
-    def test_input_and_output_limits_use_413(self):
-        from unittest.mock import patch
+    def test_default_input_limit_uses_413(self):
         with self.assertRaises(ApiError) as caught:validate_return_input('<root><r><a/></r></root>',path('root','r'),'<root>'+('é'*1_000_000)+'</root>')
         self.assertEqual((413,'INPUT_TOO_LARGE'),(caught.exception.status,caught.exception.code))
-        with patch('mockaize_api.xml_engine.OUTPUT_LIMIT',100):
-            with self.assertRaises(ApiError) as caught:generate_new(variation(),10)
-        self.assertEqual((413,'OUTPUT_LIMIT_EXCEEDED'),(caught.exception.status,caught.exception.code))
 
     def test_mixed_retains_namespace_bindings_from_each_source_envelope(self):
         import copy
@@ -216,5 +284,5 @@ class EngineTests(unittest.TestCase):
             second=copy.deepcopy(first);second.update(id='B',name='B')
             second['outputXml']='<b:out xmlns:b="urn:o" xmlns:y="urn:attr"><b:r y:id="2"><b:v>B</b:v></b:r></b:out>' if prefix else '<out xmlns="urn:o" xmlns:y="urn:attr"><r y:id="2"><v>B</v></r></out>'
             v['config']['returnModels'].append(second)
-            doc=minidom.parseString(generate_return(v,{'type':'all'},'mixed')[0]['content'])
+            doc=minidom.parseString(generate_return(v,{'type':'all'},'mixed',v['config']['inputByMode']['return']['xml'])[0]['content'])
             units=doc.getElementsByTagNameNS('urn:o','r');self.assertEqual(2,len(units));self.assertEqual('2',units[1].getAttributeNS('urn:attr','id'))
