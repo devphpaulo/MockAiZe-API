@@ -1,70 +1,202 @@
-# MockAíZé API para Windows
+# MockAíZé API
 
-Serviço independente para consultar o SQLite do MockAíZé e gerar XML com o estúdio fechado. O banco de origem é somente leitura; contadores e idempotência ficam numa base própria.
+![Tamanho do repositório](https://img.shields.io/github/repo-size/devphpaulo/MockAiZe-API?style=for-the-badge)
+![Linguagens](https://img.shields.io/github/languages/count/devphpaulo/MockAiZe-API?style=for-the-badge)
+![Último commit](https://img.shields.io/github/last-commit/devphpaulo/MockAiZe-API?style=for-the-badge)
+![Build Windows](https://github.com/devphpaulo/MockAiZe-API/actions/workflows/build.yml/badge.svg)
 
-**Instalação e configuração nativas com Inno Setup, sem Qt.** A distribuição contém `MockAiZe-API-Setup.exe` e `MockAiZeApiUninstall.exe`. O setup instala o serviço, o configurador e o desinstalador em uma pasta dedicada de Program Files, todos com o ícone do MockAíZé. Não é necessário instalar Python no computador de destino.
+<p align="center">
+  <img src="src/mockaize_api/assets/mockaize-favicon.png" alt="Logo MockAíZé" width="128">
+</p>
 
-Uma única cópia do runtime Python executa o serviço HTTP/XML. Não inclui PySide/Qt, Shiboken, Pythonwin, TLS/OpenSSL opcional ou cópias de Python nos frontends. O pacote inclui Swagger UI local para documentação e execução das requisições. Bytes e hashes exatos dos executáveis aparecem no Actions.
+**MockAíZé API** é um serviço independente para consultar as configurações XML criadas no [MockAíZé](https://github.com/devphpaulo/MockAiZe) e gerar arquivos por requisições HTTP, **sem precisar manter o estúdio aberto**.
 
-Estado: `0.2.1.dev0`, em validação. O setup cria as pastas de trabalho ausentes, inclusive sob `C:\Users\<usuário>\OneDrive\Documentos`, mesmo quando o OneDrive não está instalado; nesse caso, o caminho é uma pasta local comum.
+O MockAíZé continua responsável pela configuração visual dos arquivos, mapeamentos e fórmulas. A API reutiliza essas regras por meio de uma leitura **somente leitura** do SQLite do estúdio e mantém seus próprios controles de geração, contadores e idempotência em uma base separada.
 
-## Recursos
+> **Escopo atual:** catálogo e geração de **XML**. A API não substitui a interface do MockAíZé, não altera as configurações originais e ainda não implementa os motores de CSV, JSON ou CNAB.
 
-- `/health`; catálogo autenticado de arquivos, modos e modelos de retorno.
-- Novo com 1 a 500 registros; Retorno separado ou misto, com comparação estrutural.
-- Entrega em diretório, conteúdo XML dentro do JSON ou XML diretamente no corpo HTTP; SHA-256 e tamanho exato. Nenhum ZIP de XML é gerado.
-- Retorno com XML enviado pelo cliente ou modelo salvo; seleção de todos os registros de entrada ou somente do primeiro.
-- Chave `X-API-Key`, Problem Details, limites, idempotência e logs sanitizados.
-- Serviço Windows de baixa permissão, com início automático e firewall opcional limitado às origens escolhidas.
-- Atualização e reparo com parada verificada, troca de arquivos e rollback.
-- Desinstalação: confirma a remoção do serviço, pergunta sobre binários e pastas, preserva dados por padrão, informa eventual reinício e termina com OK.
+## Por que usar
 
-As pastas de banco, entrada, saída, logs e configuração também podem usar compartilhamentos de rede. Informe o caminho UNC completo, por exemplo `\\servidor\compartilhamento\MockAiZe`; letras mapeadas não ficam disponíveis para serviços Windows. O serviço acessa SMB como a conta do computador (`DOMÍNIO\NOME-DO-PC$`), então ela precisa de permissões de leitura/escrita no compartilhamento e no NTFS. Compartilhamentos NAS que exigem credenciais próprias ainda não são compatíveis. Os binários continuam instalados localmente em Program Files.
+- **Reutilizar configurações:** prepare as regras uma vez no MockAíZé e execute novas gerações por HTTP.
+- **Automatizar testes:** solicite novos registros e arquivos de retorno a partir de clientes HTTP, scripts e fluxos de QA.
+- **Executar independentemente:** serviço Windows com inicialização automática, sem abrir o estúdio e sem instalar Python na máquina de destino.
+- **Integrar com facilidade:** Swagger UI e OpenAPI locais, além de uma coleção pronta para o Bruno.
+- **Controlar as entregas:** grave os XMLs no servidor, receba o conteúdo em JSON ou obtenha um XML diretamente na resposta.
+- **Restringir o acesso:** chave de API, limites operacionais, idempotência, logs sanitizados e configuração de rede.
 
-## Usar a API e o Swagger
+## Como funciona
 
-Depois de instalar, abra `http://127.0.0.1:6578/` ou `/swagger/`. A interface funciona sem internet e permite executar as operações: use **Authorize** para informar a chave `X-API-Key`. O OpenAPI está em `/openapi.json` e em `/swagger/v1/swagger.json`. A documentação não contém chaves reais.
+O fluxo começa no **MockAíZé**, onde os arquivos e suas regras são preparados. Depois, a **MockAíZé API** usa essas configurações para atender às solicitações de geração.
 
-`MockAiZeApiService.exe` hospeda o serviço iniciado automaticamente pelo Windows. Ao abri-lo manualmente, ele mostra uma orientação de uso. Para configurar, use `MockAiZeApiConfig.exe`; para iniciar ou parar o serviço, use **Serviços do Windows** (`services.msc`) e procure **MockAíZé API**.
+1. **Configure no MockAíZé:** crie ou importe um XML, defina seus campos, fórmulas e, quando necessário, os modelos de retorno. Salve a variação.
+2. **Instale e configure a API:** indique o banco SQLite do estúdio, as pastas de trabalho e a chave de acesso.
+3. **Consulte o catálogo:** localize a variação e copie seu `fileId`.
+4. **Confira os modos:** verifique se a geração de novos registros ou os modelos de retorno estão prontos.
+5. **Gere e consuma:** envie uma requisição HTTP e receba o XML no formato de entrega escolhido.
 
-Todas as operações de arquivos têm o formato na URL. Nesta versão, apenas XML está implementado; CSV, JSON e CNAB terão namespaces próprios quando seus motores forem implementados.
+**Exemplo de uso:** depois de mapear um arquivo de retorno bancário no estúdio, uma automação pode enviar seu XML de entrada para a API e receber o retorno conforme as regras salvas, sem refazer o mapeamento.
 
-Método | Rota | Função
----|---|---
-GET | `/api/v1/files/xml?q=AMCB&limit=100` | Consultar XMLs por trecho do nome e paginar com `cursor`
-GET | `/api/v1/files/xml/{fileId}` | Consultar metadados por ID
-GET | `/api/v1/files/xml/{fileId}/modes` | Consultar modos prontos e pendências
-GET | `/api/v1/files/xml/{fileId}/returns` | Consultar modelos de retorno
-POST | `/api/v1/files/xml/{fileId}/new` | Gerar de 1 a 500 novos registros
-POST | `/api/v1/files/xml/{fileId}/return` | Gerar retornos com as regras salvas
+## Requisitos
 
-**Migração da versão 0.1:** as rotas sem `/files/xml` foram removidas. O `fileId` agora vai somente na URL dos POSTs; remova-o do corpo JSON. A chave e a configuração da instalação continuam válidas.
+- **Instalador:** Windows x64, com permissão para instalar e configurar um serviço do Windows.
+- **Uso da API:** um banco SQLite compatível, criado pelo [MockAíZé](https://github.com/devphpaulo/MockAiZe), com variações XML configuradas.
+- **Desenvolvimento:** Python 3.11 ou mais recente.
+- **Build local do instalador:** Inno Setup 6.7 ou mais recente.
 
-Escolha `delivery: directory` (padrão) para gravar os XMLs em Saídas, `content` para receber JSON com `files[].fileName` e `files[].content` sem gravar, ou `inline` para receber diretamente um único XML. No retorno, `inputXml` permite enviar o documento no corpo JSON; sem ele e sem `inputFilePath`, usa o exemplo salvo no banco.
+A distribuição usa **Inno Setup** e um runtime Python empacotado. Não depende de PySide/Qt, não exige Python instalado no destino e inclui Swagger UI local.
 
-`inputRecords: all` (padrão) usa todos os registros da entrada; `first` usa o primeiro. Isso é independente de `returnSelection`, que escolhe os modelos, e de `composition`, que os separa (`apart`) ou intercala (`mixed`). As regras de cópia e cálculos de entrada usam os valores enviados, mantendo os demais geradores configurados. O Swagger descreve os limites, as estruturas compatíveis e exemplos completos de cada combinação.
+## Instalação no Windows
 
-## Usar no Bruno
+1. Acesse o [workflow de build](https://github.com/devphpaulo/MockAiZe-API/actions/workflows/build.yml).
+2. Abra uma execução concluída com sucesso e baixe o artefato **MockAiZe-API-Setup-Windows-x64**.
+3. Extraia o ZIP e execute `MockAiZe-API-Setup.exe`.
+4. No assistente, configure o caminho do SQLite do MockAíZé, os diretórios de entrada/saída/logs e o acesso ao serviço.
+5. Guarde a chave de API exibida na configuração; ela será necessária para as requisições autenticadas.
 
-Importe a pasta [`bruno/`](bruno/) como collection e selecione o ambiente `local`. O guia explica onde configurar a chave da API e o identificador da variação.
+O pacote também contém `MockAiZeApiUninstall.exe`. O instalador registra o serviço **MockAíZé API** e disponibiliza o configurador `MockAiZeApiConfig.exe`. Para iniciá-lo ou pará-lo, abra **Serviços do Windows** (`services.msc`).
 
-## Download e build
+O artefato do Actions fica disponível por **30 dias** após cada execução. Prefira o build mais recente aprovado em vez de links para artefatos de execuções antigas.
 
-[Baixar o setup 0.2.1 com Swagger](https://github.com/devphpaulo/MockAiZe-API/actions/runs/40063791193/artifacts/12548950427): setup de 11.097.038 bytes e desinstalador de 2.156.330 bytes. [Actions aprovado](https://github.com/devphpaulo/MockAiZe-API/actions/runs/40063791193), commit `2722a49`.
+### Abrir Swagger e testar a conexão
 
-No [workflow Windows](https://github.com/devphpaulo/MockAiZe-API/actions/workflows/build.yml), abra uma execução nativa concluída com sucesso e baixe o artefato **MockAiZe-API-Setup-Windows-x64**. Extraia o ZIP do Actions para obter os dois EXEs. Os artefatos ficam disponíveis por 30 dias.
+Com a configuração padrão, abra:
 
-O Actions testa Python 3.11/3.14, instala o pacote fora do checkout e compila a distribuição. Depois verifica arquitetura, ícones, composição, licenças e tamanho; testa o serviço compilado com HTTP/XML reais; e instala, configura, repara e desinstala o produto no runner Windows descartável. Falhas impedem o upload.
+- **Swagger UI:** [http://127.0.0.1:6578/](http://127.0.0.1:6578/) (também em `/swagger/`).
+- **Health:** [http://127.0.0.1:6578/health](http://127.0.0.1:6578/health).
+- **OpenAPI:** [http://127.0.0.1:6578/openapi.json](http://127.0.0.1:6578/openapi.json) (também em `/swagger/v1/swagger.json`).
 
-Para desenvolver, use Python 3.11 ou superior. Para compilar, instale também Inno Setup 6.7 ou superior:
+O Swagger funciona **sem internet**. Clique em **Authorize** e informe a chave de `X-API-Key`. A operação `GET /health` dispensa autenticação; as rotas de catálogo e geração exigem a chave.
 
-```powershell
-python -m venv .venv
-.\.venv\Scripts\python -m pip install -e '.[windows,packaging]'
-.\.venv\Scripts\python -W error::ResourceWarning -m unittest discover -s tests -v
+## Recursos e rotas
+
+| Método | Rota | O que faz |
+| --- | --- | --- |
+| GET | `/health` | Verifica a saúde do serviço. |
+| GET | `/api/v1/files/xml` | Lista variações XML, com filtro `q`, `limit` e paginação por `cursor`. |
+| GET | `/api/v1/files/xml/{fileId}` | Consulta os metadados de uma variação. |
+| GET | `/api/v1/files/xml/{fileId}/modes` | Verifica modos disponíveis e requisitos pendentes. |
+| GET | `/api/v1/files/xml/{fileId}/returns` | Lista os modelos de retorno e seu estado de preparação. |
+| POST | `/api/v1/files/xml/{fileId}/new` | Gera de **1 a 500 novos registros** usando as regras salvas. |
+| POST | `/api/v1/files/xml/{fileId}/return` | Gera um ou mais retornos XML usando os modelos configurados. |
+
+O `fileId` vem do catálogo e deve ser informado **somente na URL**, nunca no corpo das requisições. Nas versões anteriores à série 0.2, as rotas não usavam `/files/xml`; essas rotas antigas foram removidas.
+
+### Gerar novos registros
+
+Use `POST /api/v1/files/xml/{fileId}/new`, com `Content-Type: application/json` e `X-API-Key`:
+
+~~~json
+{
+  "recordCount": 100,
+  "delivery": "content"
+}
+~~~
+
+A API aplica as regras de geração da variação selecionada e devolve o resultado conforme `delivery`. Neste exemplo, o XML completo aparece em `files[].content` no JSON, sem gravar arquivos em Saídas.
+
+### Gerar arquivos de retorno
+
+Use `POST /api/v1/files/xml/{fileId}/return`:
+
+~~~json
+{
+  "returnSelection": {
+    "type": "all"
+  },
+  "inputRecords": "all",
+  "composition": "apart",
+  "delivery": "content"
+}
+~~~
+
+Sem `inputXml` e sem `inputFilePath`, a API utiliza o XML de exemplo salvo na configuração. Você também pode enviar seu próprio XML em `inputXml`, ou indicar em `inputFilePath` um arquivo dentro da pasta **Entradas** autorizada. Essas duas opções são mutuamente exclusivas.
+
+O XML fornecido deve seguir a **estrutura configurada no estúdio**; os valores podem mudar. Regras de cópia e cálculos de entrada utilizam os valores recebidos, enquanto os demais geradores continuam usando as configurações salvas.
+
+As opções são independentes:
+
+- `inputRecords: "all"` usa todos os registros de entrada; `"first"` usa apenas o primeiro.
+- `returnSelection: {"type":"all"}` seleciona todos os modelos prontos; `{"type":"ids","ids":[...]}` permite escolher modelos específicos.
+- `composition: "apart"` gera um XML por modelo; `"mixed"` intercala os registros em um XML, quando os modelos são compatíveis.
+
+**Exemplo:** com 10 registros de entrada e 2 modelos selecionados, `apart` produz 2 XMLs com 10 registros cada; `mixed` produz 1 XML com 20 registros. Com `inputRecords: "first"`, o resultado usa apenas o primeiro registro de entrada para cada modelo.
+
+### Escolher como receber o XML
+
+| `delivery` | Resposta HTTP | Grava no servidor? |
+| --- | --- | --- |
+| `directory` (padrão) | JSON com arquivos e metadados | **Sim**, na pasta Saídas configurada. |
+| `content` | JSON com `files[].fileName` e `files[].content` | Não. |
+| `inline` | Um único XML diretamente no corpo HTTP | Não. Exige apenas um documento final. |
+
+Os resultados incluem metadados como **SHA-256** e **tamanho em bytes**. Os limites incluem entrada XML de até **2 MB**, saída de até **100 MB** e até **20 modelos de retorno** selecionados. A API não gera ZIP de XMLs.
+
+## Integrar com o Bruno
+
+A pasta [`bruno/`](bruno/) contém uma coleção com consultas ao catálogo, geração de novos registros e cenários de retorno.
+
+Importe-a no Bruno, selecione o ambiente `local` e configure `apiKey`, `baseUrl` e `fileId`. Consulte o [guia da coleção](bruno/README.md) para exemplos de requisições e opções de entrega.
+
+Para evitar repetir uma geração após uma falha de rede, use opcionalmente o cabeçalho `Idempotency-Key`. Repetir a mesma operação com a mesma chave reaproveita a resposta; reutilizá-la com outra operação provoca conflito.
+
+## Configuração, dados e segurança
+
+Por padrão, a API atende em `127.0.0.1:6578`, acessível somente na própria máquina. Para acesso pela rede, a configuração admite `0.0.0.0` com `firewallAccess: "Y"` e regras de firewall limitadas às origens escolhidas. **Não publique o serviço diretamente na internet:** ele não fornece TLS nativo.
+
+O SQLite do MockAíZé é aberto em **somente leitura**, sem alterar as variações. A API mantém estado operacional, contadores, idempotência e credenciais separados; a chave é exibida somente ao criar ou rotacionar, e o arquivo de credenciais armazena apenas seu hash.
+
+Os diretórios de banco, Entradas, Saídas e Logs podem apontar para caminhos locais ou **UNC** (`\\servidor\compartilhamento\MockAiZe`). No Windows, serviços não enxergam letras de unidades de rede mapeadas. Em compartilhamentos SMB, conceda permissões à conta do computador (`DOMÍNIO\NOME-DO-PC$`) no compartilhamento e no NTFS; NAS que exigem credenciais próprias não são compatíveis nesta versão.
+
+O instalador também aceita pastas de trabalho em `Documentos` redirecionado pelo OneDrive. A configuração pode ser alterada pelo `MockAiZeApiConfig.exe`. Reparos e atualizações verificam a parada do serviço e incluem procedimento de rollback; a desinstalação **preserva os dados por padrão** e permite escolher o que remover.
+
+## Desenvolvimento e testes
+
+Clone o repositório, crie o ambiente e execute os testes:
+
+~~~powershell
+git clone https://github.com/devphpaulo/MockAiZe-API.git
+cd MockAiZe-API
+
+py -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e '.[windows,packaging]'
+.\.venv\Scripts\python.exe -W error::ResourceWarning -m unittest discover -s tests -v
+~~~
+
+Para executar a API em primeiro plano, copie [`packaging/config.example.json`](packaging/config.example.json) para um arquivo de configuração local, ajuste os **caminhos absolutos** e execute:
+
+~~~powershell
+.\.venv\Scripts\mockaize-api.exe --config .\config.local.json --check
+.\.venv\Scripts\mockaize-api.exe --config .\config.local.json --create-key
+.\.venv\Scripts\mockaize-api.exe --config .\config.local.json --serve
+~~~
+
+Para substituir uma chave existente, use `--rotate-key` em vez de `--create-key`. O comando de desenvolvimento **não instala nem registra** um serviço do Windows.
+
+### Build do instalador
+
+~~~powershell
 .\packaging\build.ps1 -Python .\.venv\Scripts\python.exe
-```
+~~~
 
-O build usa o ICO aprovado já versionado. `release/` contém somente os dois EXEs; `build/` e `dist/` são intermediários. `.pkg` não é entregue. O planejamento `initial-api-docs/` permanece local e ignorado pelo Git.
+O build produz `release/MockAiZe-API-Setup.exe` e `release/MockAiZeApiUninstall.exe`. As pastas `build/` e `dist/` são intermediárias. O [workflow Windows](.github/workflows/build.yml) testa Python 3.11 e 3.14, valida o pacote instalado, verifica os binários e exercita a instalação, o serviço, o reparo e a remoção em um runner descartável.
 
-Para desenvolvimento em primeiro plano, copie `packaging/config.example.json` para um JSON local e ajuste caminhos absolutos. Use `mockaize-api --config <caminho> --check`, `--create-key` e `--serve`. A chave é exibida apenas na criação; somente seu hash fica em `credentials.json`. No produto instalado, use o configurador nativo no menu Iniciar.
+## Estrutura do projeto
+
+- `src/mockaize_api/` — servidor HTTP, catálogo, regras XML, segurança, configuração e serviço Windows.
+- `src/mockaize_api/assets/swagger/` — OpenAPI e Swagger UI empacotados para uso offline.
+- `bruno/` — coleção de requisições e ambiente local.
+- `packaging/` — scripts de build, empacotamento, instalador e verificações.
+- `tests/` — testes automatizados dos contratos e operações.
+- `.github/workflows/` — build e inspeção dos artefatos.
+
+## Contribuição
+
+Contribuições são bem-vindas. Abra uma issue descrevendo a necessidade ou envie um pull request com escopo definido e testes. Mudanças no contrato HTTP devem considerar o OpenAPI, a coleção Bruno e a compatibilidade com as configurações do MockAíZé.
+
+## Autor
+
+**Paulo Henrique** — [@devphpaulo](https://github.com/devphpaulo)
+
+## Avisos de terceiros
+
+As licenças e os avisos dos componentes distribuídos estão em [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). A licença do projeto principal está documentada no [repositório MockAíZé](https://github.com/devphpaulo/MockAiZe).
