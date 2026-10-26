@@ -16,8 +16,8 @@ Referência: pacote `tasks/refinamento/planos-api-site-reformulations`, lido int
 | Tarefa | Dependências | Responsável | Estado | Evidência |
 |---|---|---|---|---|
 | API-01 | Contrato autorizado | Oliver | Concluída | 168 testes OK, 1 ignorado; Dan sem achados bloqueantes; Luda APROVADO |
-| API-02 | API-01 | Oliver | Em execução | Envelope público de erros |
-| API-03 | API-01/02 | Ye | Pendente | Entrada obrigatória e limites |
+| API-02 | API-01 | Oliver | Concluída | 176 testes OK, 1 ignorado; Dan sem bloqueantes; Luda APROVADO |
+| API-03 | API-01/02 | Ye | Em execução | Entrada obrigatória e limites |
 | API-04 | API-01..03 | Oliver | Pendente | Bearer e login |
 | API-05 | API-01..04; Site para integração real | Ye | Pendente | Consumidor XML com fixtures permitido pelo plano |
 | API-06 | API-01..05 | Ye | Pendente | Limpeza startup e replay |
@@ -27,3 +27,7 @@ Referência: pacote `tasks/refinamento/planos-api-site-reformulations`, lido int
 
 As edições são sequenciais; o coordenador revisa diff e validação antes da próxima tarefa.
 Integração real com o produtor Site e smoke nativo compilado precisam de evidência própria para serem declarados concluídos.
+
+## API-02: limite operacional conhecido
+
+Eventos de rejeição por lotação usam uma fila limitada e um único gravador auxiliar por servidor. A aceitação não espera o disco; fila cheia responde 503. Uma gravação de filesystem já iniciada não pode ser interrompida com segurança e pode permanecer no worker daemon até retornar, sem impedir o encerramento do servidor. O teste cobre log bloqueado, continuidade do atendimento, fila cheia e encerramento.

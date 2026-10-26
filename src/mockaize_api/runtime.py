@@ -1,10 +1,12 @@
 """Host HTTP standalone, sem sessão do estúdio ou dependência de navegador."""
 from collections import deque
 import hashlib
+from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import multiprocessing
 from pathlib import Path
+import queue
 import re
 import socket
 import threading
@@ -84,14 +86,36 @@ def _json(status: int, value: dict) -> dict:
 
 
 def _problem(error: ApiError, request_id: str) -> dict:
-    extensions = {key: value for key, value in error.extensions.items() if key in {'xmlPath', 'reason'}}
-    response = _json(error.status, {'type': 'about:blank', 'title': error.code, 'status': error.status,
-                                   'detail': error.detail, 'code': error.code, 'requestId': request_id,
-                                   **extensions})
-    response['headers']['Content-Type'] = 'application/problem+json; charset=utf-8'
+    response = _json(error.status, {'error': {'code': error.code, 'message': error.detail,
+                                            'traceId': request_id}, **error.public_extensions()})
+    response['headers']['X-Request-ID'] = request_id
     if error.status == 429:
         response['headers']['Retry-After'] = '1'
     return response
+
+
+def _response_error(response: dict) -> dict:
+    """Read new errors and persisted legacy errors without rewriting replay bytes."""
+    if response['status'] < 400 or 'json' not in response['headers'].get('Content-Type', ''):
+        return {}
+    try:
+        payload = json.loads(response['body'])
+    except (ValueError, UnicodeError):
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    if isinstance(payload.get('error'), dict):
+        return payload['error']
+    if response['headers'].get('X-Idempotent-Replay') == 'true' and 'code' in payload:
+        return {'code': payload['code'], 'traceId': payload.get('requestId')}
+    return {}
+
+
+def _response_trace(response: dict, request_id: str) -> str:
+    trace_id = _response_error(response).get('traceId')
+    if isinstance(trace_id, str) and re.fullmatch(r'[A-Za-z0-9_-]{1,128}', trace_id):
+        return trace_id
+    return request_id
 
 
 def _invalid():
@@ -276,12 +300,63 @@ class ApiServer(ThreadingHTTPServer):
         self.connections = threading.BoundedSemaphore(application.policy.maximum_connections)
         self.active_sockets = set()
         self.active_lock = threading.Lock()
+        self.rejection_events = queue.Queue(maxsize=application.policy.maximum_connections)
+        self.rejection_stop = threading.Event()
+        self.rejection_worker = None
         super().__init__(address, Handler)
+        self.rejection_worker = threading.Thread(target=self._write_rejection_events,
+                                                 name='mockaize-rejection-log', daemon=True)
+        self.rejection_worker.start()
+
+    def _write_rejection_events(self):
+        while True:
+            entry = self.rejection_events.get()
+            try:
+                if entry is None or self.rejection_stop.is_set():
+                    return
+                try:
+                    self.application.log.write(**entry)
+                except ApiError:
+                    # Log dependency failures must not block the accept loop or
+                    # terminate the service. The HTTP response was already sent.
+                    pass
+            finally:
+                self.rejection_events.task_done()
+
+    def _queue_rejection(self, request_id):
+        if self.rejection_stop.is_set():
+            return False
+        try:
+            self.rejection_events.put_nowait({'requestId': request_id, 'method': 'UNPARSED',
+                                             'route': 'unmatched', 'status': 429, 'code': 'RATE_LIMITED',
+                                             'responseTraceId': request_id})
+            return True
+        except queue.Full:
+            return False
 
     def process_request(self, request, client_address):
         if not self.connections.acquire(blocking=False):
+            request_id = str(uuid.uuid4())
+            response = _problem(ApiError(429, 'RATE_LIMITED', 'Limite de conexões excedido.'), request_id)
             try:
-                request.sendall(b'HTTP/1.0 429 Too Many Requests\r\nContent-Length: 0\r\nRetry-After: 1\r\nCache-Control: no-store\r\n\r\n')
+                # A bounded discard avoids Windows resetting the connection when
+                # an ordinary request arrives while its rejection is being sent.
+                # Never parse/log these bytes or wait for a slow client's body.
+                request.settimeout(0.05)
+                try:
+                    request.recv(65536)
+                except (OSError, TimeoutError):
+                    pass
+                if not self._queue_rejection(request_id):
+                    response = _problem(ApiError(503, 'DEPENDENCY_UNAVAILABLE',
+                                                 'Log operacional temporariamente indisponível.'), request_id)
+                headers = {**response['headers'], 'Content-Length': str(len(response['body'])),
+                           'Cache-Control': 'no-store', 'Connection': 'close'}
+                head = f"HTTP/1.0 {response['status']} {HTTPStatus(response['status']).phrase}\r\n" + ''.join(
+                    f'{key}: {value}\r\n' for key, value in headers.items()) + '\r\n'
+                request.sendall(head.encode('ascii') + response['body'])
+            except OSError:
+                pass
             finally:
                 self.shutdown_request(request)
             return
@@ -313,6 +388,15 @@ class ApiServer(ThreadingHTTPServer):
 
     def server_close(self):
         self.close_clients()
+        self.rejection_stop.set()
+        try:
+            self.rejection_events.put_nowait(None)
+        except queue.Full:
+            pass
+        # A filesystem/network write cannot be interrupted safely. One daemon
+        # worker and a finite queue bound its resources without delaying stop.
+        if self.rejection_worker is not None:
+            self.rejection_worker.join(0.1)
         super().server_close()
 
     def handle_error(self, request, client_address):
@@ -330,6 +414,22 @@ class Handler(BaseHTTPRequestHandler):
 
     def log_message(self, *args):
         pass
+
+    def send_error(self, code, message=None, explain=None):
+        # BaseHTTPHandler diagnostics can contain request targets and credentials.
+        # Keep the original HTTP status and supply only fixed public messages.
+        codes = {414: 'REQUEST_URI_TOO_LONG', 431: 'REQUEST_HEADERS_TOO_LARGE',
+                 501: 'METHOD_NOT_ALLOWED', 505: 'HTTP_VERSION_UNSUPPORTED'}
+        request_id = str(uuid.uuid4())
+        self.route = 'unmatched'
+        command = getattr(self, 'command', None)
+        self.command = command if command in {
+            'GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS', 'TRACE', 'CONNECT'} else 'UNPARSED'
+        if getattr(self, 'request_version', '') in ('HTTP/0.9', ''):
+            self.request_version = 'HTTP/1.0'
+        response = _problem(ApiError(code, codes.get(code, 'INVALID_REQUEST'),
+                                     'Não foi possível processar a requisição HTTP.'), request_id)
+        self._respond(response, request_id, time.monotonic())
 
     def _body(self):
         if self.headers.get_content_type() != 'application/json':
@@ -437,14 +537,21 @@ class Handler(BaseHTTPRequestHandler):
             response = _problem(ApiError(408, 'REQUEST_TIMEOUT', 'Tempo limite de leitura excedido.'), request_id)
         except Exception:
             response = _problem(ApiError(500, 'INTERNAL_ERROR', 'Falha interna na operação.'), request_id)
+        self._respond(response, request_id, started)
+
+    def _respond(self, response, request_id, started):
+        response_trace = _response_trace(response, request_id)
         try:
             entry = {'requestId': request_id, 'method': self.command, 'route': self.route,
                      'status': response['status'], 'durationMs': round((time.monotonic() - started) * 1000, 2)}
             if response['headers'].get('Content-Type', '').startswith('application/json'):
                 payload = json.loads(response['body'])
                 entry.update({key: payload[key] for key in ['fileId', 'sourceRevision', 'composition', 'files'] if key in payload})
-            if response['status'] >= 400 and 'problem+json' in response['headers'].get('Content-Type', ''):
-                entry['code'] = json.loads(response['body'])['code']
+            error = _response_error(response)
+            if error:
+                entry.update(code=error['code'], responseTraceId=response_trace)
+                if response['headers'].get('X-Idempotent-Replay') == 'true':
+                    entry['replayOfTraceId'] = response_trace
             if 'X-Mockaize-SHA256' in response['headers']:
                 entry['files'] = [{'sha256': response['headers']['X-Mockaize-SHA256'],
                                    'sizeBytes': int(response['headers']['X-Mockaize-Size-Bytes'])}]
@@ -452,12 +559,14 @@ class Handler(BaseHTTPRequestHandler):
         except ApiError as error:
             response = (_json(503, {'status': 'unavailable', 'version': __version__})
                         if self.route == '/health' else _problem(error, request_id))
+            response_trace = request_id
         try:
             self.send_response(response['status'])
             for key, value in response['headers'].items():
-                self.send_header(key, str(value))
+                if key.lower() != 'x-request-id':
+                    self.send_header(key, str(value))
             self.send_header('Cache-Control', 'no-store')
-            self.send_header('X-Request-ID', request_id)
+            self.send_header('X-Request-ID', response_trace)
             self.send_header('Content-Length', str(len(response['body'])))
             self.send_header('Connection', 'close')
             self.end_headers()

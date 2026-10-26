@@ -11,7 +11,8 @@ from unittest.mock import patch
 
 from fixtures.catalog_factory import create_catalog
 from mockaize_api.config import ApiConfig, save_config
-from mockaize_api.runtime import ApiServer, Application
+from mockaize_api.errors import ApiError
+from mockaize_api.runtime import ApiServer, Application, _problem
 from mockaize_api.security import create_credentials
 
 
@@ -197,7 +198,7 @@ class HttpTests(unittest.TestCase):
         self.assertEqual([item['id'] for item in json.loads(body)['items']], ['new', 'return'])
         status, _, body = self.call('POST', '/api/v1/files/xml/file-1/new', {'recordCount': 1, 'expectedRevision': 999})
         self.assertEqual(status, 409)
-        self.assertEqual(json.loads(body)['code'], 'REVISION_MISMATCH')
+        self.assertEqual(json.loads(body)['error']['code'], 'REVISION_MISMATCH')
 
     def test_new_inline_hash_and_count_and_idempotency(self):
         from xml.dom import minidom
@@ -237,7 +238,7 @@ class HttpTests(unittest.TestCase):
         for origin in [{'inputXml': path.read_text()}, {'inputFilePath': str(path)}]:
             status, _, body = self.call('POST', '/api/v1/files/xml/file-1/return', dict(payload, **origin))
             self.assertEqual(status, 422, body)
-            self.assertEqual(json.loads(body)['code'], 'INPUT_XML_STRUCTURE_MISMATCH')
+            self.assertEqual(json.loads(body)['error']['code'], 'INPUT_XML_STRUCTURE_MISMATCH')
         self.assertEqual(list((self.root / 'output').iterdir()), [])
 
     def test_body_validation_unknown_fields_null_boolean_and_delivery(self):
@@ -251,7 +252,7 @@ class HttpTests(unittest.TestCase):
         status, _, body = self.call('POST', '/api/v1/files/xml/file-1/return', {
             'returnSelection': {'type': 'ids', 'ids': ['unknown']}})
         self.assertEqual(status, 404)
-        self.assertEqual(json.loads(body)['code'], 'RETURN_NOT_FOUND')
+        self.assertEqual(json.loads(body)['error']['code'], 'RETURN_NOT_FOUND')
 
     def test_health_degrades_when_database_is_lost(self):
         (self.root / 'source.sqlite3').unlink()
@@ -310,3 +311,185 @@ class HttpTests(unittest.TestCase):
         self.assertNotIn(self.key, logs)
         self.assertNotIn('<secret>', logs)
         self.assertNotIn(str(self.root), logs)
+
+    def assert_envelope(self, response, expected_status):
+        status, headers, content = response
+        self.assertEqual(status, expected_status, content)
+        self.assertEqual(headers['Content-Type'], 'application/json; charset=utf-8')
+        value = json.loads(content)
+        self.assertEqual(set(value['error']), {'code', 'message', 'traceId'})
+        self.assertEqual(value['error']['traceId'], headers['X-Request-ID'])
+        self.assertNotIn('status', value)
+        self.assertNotIn(self.key.encode(), content)
+        self.assertNotIn(str(self.root).encode(), content)
+        return value
+
+    def log_entries(self):
+        return [json.loads(line) for path in (self.root / 'logs').glob('*.txt')
+                for line in path.read_text(encoding='utf-8').splitlines()]
+
+    def test_public_error_envelopes_cover_http_status_and_log_correlation(self):
+        route = '/api/v1/files/xml/file-1/new'
+        responses = [
+            (self.call('POST', route, {'recordCount': True}), 400),
+            (self.call('GET', '/api/v1/files/xml', authenticated=False), 401),
+            (self.call('GET', '/api/v1/files/xml/missing'), 404),
+            (self.call('POST', '/api/v1/files/xml', {}), 405),
+            (self.call('POST', route, {'recordCount': 1, 'expectedRevision': 999}), 409),
+            (self.call('POST', route, {}, {'Content-Type': 'text/plain'}), 415),
+            (self.call('POST', '/api/v1/files/xml/file-1/return',
+                       {'returnSelection': {'type': 'all'}, 'inputXml': '<wrong/>'}), 422),
+        ]
+        with patch('mockaize_api.runtime.MAX_BODY', 1):
+            responses.append((self.call('POST', route, {'recordCount': 1}), 413))
+        with patch.object(self.server.application, 'rate_check', side_effect=ApiError(429, 'RATE_LIMITED', 'Aguarde.')):
+            response = self.call('GET', '/api/v1/files/xml')
+            self.assertEqual(response[1]['Retry-After'], '1')
+            responses.append((response, 429))
+        with patch('mockaize_api.runtime.run_engine', side_effect=RuntimeError('PRIVATE-EXCEPTION')):
+            responses.append((self.call('POST', route, {'recordCount': 1}), 500))
+        with patch.object(self.server.application.catalog, 'file',
+                          side_effect=ApiError(503, 'DEPENDENCY_UNAVAILABLE', 'Indisponível.')):
+            responses.append((self.call('GET', '/api/v1/files/xml/file-1'), 503))
+        entries = {entry['requestId']: entry for entry in self.log_entries()}
+        for response, expected in responses:
+            with self.subTest(status=expected):
+                value = self.assert_envelope(response, expected)
+                error = value['error']
+                self.assertEqual(entries[error['traceId']]['code'], error['code'])
+                self.assertNotIn(b'PRIVATE-EXCEPTION', response[2])
+
+    def test_error_replay_preserves_original_body_trace_and_records_current_attempt(self):
+        payload = {'recordCount': 1, 'expectedRevision': 999}
+        route = '/api/v1/files/xml/file-1/new'
+        headers = {'Idempotency-Key': 'error-replay'}
+        original = self.call('POST', route, payload, headers)
+        original_id = self.assert_envelope(original, 409)['error']['traceId']
+        replay = self.call('POST', route, payload, headers)
+        self.assertEqual(replay[2], original[2])
+        self.assertEqual(replay[1]['X-Request-ID'], original_id)
+        self.assertEqual(replay[1]['X-Idempotent-Replay'], 'true')
+        entry = self.log_entries()[-1]
+        self.assertNotEqual(entry['requestId'], original_id)
+        self.assertEqual(entry['responseTraceId'], original_id)
+        self.assertEqual(entry['replayOfTraceId'], original_id)
+        self.assertEqual(entry['code'], 'REVISION_MISMATCH')
+
+    def test_legacy_persisted_error_replay_keeps_bytes_and_original_request_id(self):
+        body = json.dumps({'code': 'LEGACY_FAILURE', 'status': 422,
+                           'requestId': 'legacy-trace', 'detail': 'Falha anterior.'}).encode()
+        response = {'status': 422, 'headers': {'Content-Type': 'application/problem+json; charset=utf-8'},
+                    'body': body}
+        with patch.object(self.server.application.state, 'begin', return_value=response):
+            status, headers, actual = self.call('POST', '/api/v1/files/xml/file-1/new',
+                                               {'recordCount': 1}, {'Idempotency-Key': 'legacy-error'})
+        self.assertEqual(status, 422)
+        self.assertEqual(actual, body)
+        self.assertEqual(headers['X-Request-ID'], 'legacy-trace')
+        self.assertEqual(headers['Content-Type'], 'application/problem+json; charset=utf-8')
+        entry = self.log_entries()[-1]
+        self.assertNotEqual(entry['requestId'], 'legacy-trace')
+        self.assertEqual(entry['responseTraceId'], 'legacy-trace')
+        self.assertEqual(entry['replayOfTraceId'], 'legacy-trace')
+        self.assertEqual(entry['code'], 'LEGACY_FAILURE')
+
+    def test_connection_saturation_returns_json_and_logs_its_trace(self):
+        slots = self.server.application.policy.maximum_connections
+        for _ in range(slots):
+            self.server.connections.acquire()
+        try:
+            response = self.call('GET', '/health', authenticated=False)
+        finally:
+            for _ in range(slots):
+                self.server.connections.release()
+        value = self.assert_envelope(response, 429)
+        self.assertEqual(response[1]['Retry-After'], '1')
+        self.server.rejection_events.join()
+        self.assertEqual(self.log_entries()[-1]['requestId'], value['error']['traceId'])
+
+    def test_slow_rejection_log_does_not_block_accept_or_server_close(self):
+        entered, release = threading.Event(), threading.Event()
+        writer = self.server.application.log.write
+
+        def slow_write(**entry):
+            if entry.get('method') == 'UNPARSED':
+                entered.set()
+                release.wait(10)
+            writer(**entry)
+
+        slots = self.server.application.policy.maximum_connections
+        for _ in range(slots):
+            self.server.connections.acquire()
+        try:
+            with patch.object(self.server.application.log, 'write', side_effect=slow_write):
+                started = time.monotonic()
+                self.assert_envelope(self.call('GET', '/health', authenticated=False), 429)
+                self.assertLess(time.monotonic() - started, 2)
+                self.assertTrue(entered.wait(2), 'The rejection log worker did not start.')
+                for _ in range(slots):
+                    self.server.connections.release()
+                slots = 0
+                started = time.monotonic()
+                self.assertEqual(self.call('GET', '/', authenticated=False)[0], 200)
+                self.assertLess(time.monotonic() - started, 2)
+                self.assertFalse(release.is_set())
+                capacity = self.server.application.policy.maximum_connections
+                for index in range(capacity):
+                    self.assertTrue(self.server._queue_rejection(f'queued-{index}'))
+                self.assertFalse(self.server._queue_rejection('overflow'))
+                self.assertEqual(self.server.rejection_events.qsize(), capacity)
+                for _ in range(capacity):
+                    self.server.connections.acquire()
+                try:
+                    self.assert_envelope(self.call('GET', '/health', authenticated=False), 503)
+                finally:
+                    for _ in range(capacity):
+                        self.server.connections.release()
+                self.server.shutdown()
+                self.thread.join(2)
+                started = time.monotonic()
+                self.server.server_close()
+                self.assertLess(time.monotonic() - started, 1)
+        finally:
+            release.set()
+            for _ in range(slots):
+                self.server.connections.release()
+
+    def test_parser_and_unknown_method_errors_use_sanitized_json(self):
+        response = self.call('PRIVATE-METHOD', '/health', authenticated=False)
+        self.assert_envelope(response, 501)
+        client = socket.create_connection(self.server.server_address, timeout=5)
+        try:
+            client.sendall(b'GET /PRIVATE-PATH HTTP/1.invalid\r\n\r\n')
+            from http.client import HTTPResponse
+            parsed = HTTPResponse(client)
+            parsed.begin()
+            response = (parsed.status, dict(parsed.getheaders()), parsed.read())
+        finally:
+            client.close()
+        self.assert_envelope(response, 400)
+        content = response[2].decode() + json.dumps(self.log_entries())
+        self.assertNotIn('PRIVATE-PATH', content)
+        self.assertNotIn('PRIVATE-METHOD', content)
+
+
+class ErrorEnvelopeTests(unittest.TestCase):
+    def test_error_status_stays_only_in_http_for_every_representative_code(self):
+        for status in (400, 401, 403, 404, 405, 409, 413, 415, 422, 429, 500, 503):
+            with self.subTest(status=status):
+                response = _problem(ApiError(status, 'PUBLIC_CODE', 'Mensagem.'), 'trace')
+                self.assertEqual(response['status'], status)
+                self.assertEqual(set(json.loads(response['body'])), {'error'})
+                self.assertEqual(response['headers']['X-Request-ID'], 'trace')
+
+    def test_only_documented_typed_extensions_are_exposed_at_root(self):
+        error = ApiError(422, 'INPUT_XML_STRUCTURE_MISMATCH', 'Estrutura divergente.',
+                         xmlPath='Document/Record', reason='namespace-divergente',
+                         error={'code': 'OVERRIDE'}, requestId='OVERRIDE', secret='PRIVATE')
+        response = _problem(error, 'original-trace')
+        self.assertEqual(response['headers']['Content-Type'], 'application/json; charset=utf-8')
+        self.assertEqual(json.loads(response['body']), {
+            'error': {'code': error.code, 'message': error.detail, 'traceId': 'original-trace'},
+            'xmlPath': 'Document/Record', 'reason': 'namespace-divergente'})
+        error.extensions.update(xmlPath={'PRIVATE': True}, reason=['PRIVATE'])
+        self.assertEqual(set(json.loads(_problem(error, 'trace')['body'])), {'error'})
