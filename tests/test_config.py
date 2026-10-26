@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from mockaize_api.config import ConfigurationError, load_config, save_config
+from mockaize_api.config import ApiConfig, ConfigurationError, load_config, save_config
 
 
 class ConfigurationTests(unittest.TestCase):
@@ -84,3 +84,69 @@ class ConfigurationTests(unittest.TestCase):
                 save_config(self.path, config)
         self.assertEqual(self.path.read_bytes(), original)
         self.assertEqual(list(self.root.iterdir()), [self.path])
+
+    def test_expanded_configuration_round_trips_without_losing_options(self):
+        self.values.update(
+            presetsDirectory=str(self.root / 'Regras áé'),
+            authentication={'required': False},
+            limits={'inputXml': {'mode': 'custom', 'bytes': 3000000},
+                    'records': {'mode': 'disabled'}},
+            cleanup={'inputs': {'mode': 'age', 'days': 7},
+                     'outputs': {'mode': 'disabled'}, 'logs': {'mode': 'age', 'days': 45}})
+        self.write()
+        config = load_config(self.path)
+        self.assertEqual(config.presets_directory, self.root / 'Regras áé')
+        self.assertFalse(config.authentication.required)
+        save_config(self.path, config)
+        self.assertEqual(load_config(self.path), config)
+        self.assertEqual(config.to_mapping(), self.values)
+
+    def test_legacy_defaults_and_constructor_are_compatible(self):
+        config = ApiConfig.from_mapping(self.values)
+        self.assertEqual(config.presets_directory, self.root / 'Presets')
+        self.assertTrue(config.authentication.required)
+        direct = ApiConfig(config.database_path, config.input_directory, config.output_directory,
+                           config.logs_directory, config.port, config.host, config.firewall_access)
+        self.assertEqual(direct, config)
+
+    def test_optional_fields_reject_unknown_keys_types_and_invalid_modes(self):
+        invalid = [
+            {'authentication': {'required': 1}}, {'authentication': {'users': []}},
+            {'authentication': None}, {'presetsDirectory': 'relative'},
+            {'limits': {'outputXml': {'mode': 'disabled'}}},
+            {'limits': {'inputXml': {'mode': 'custom', 'bytes': True}}},
+            {'limits': {'inputXml': {'mode': 'custom', 'bytes': 0}}},
+            {'limits': {'records': {'mode': 'custom', 'count': -1}}},
+            {'limits': {'records': {'mode': 'custom'}}},
+            {'limits': {'records': {'mode': 'unknown'}}},
+            {'limits': {'records': {'mode': 'disabled', 'count': 1000}}},
+            {'cleanup': {'inputs': {'mode': 'age', 'days': 0}}},
+            {'cleanup': {'logs': {'mode': 'age', 'days': True}}},
+            {'cleanup': {'outputs': {'mode': 'daily', 'days': 1}}},
+            {'cleanup': {'unknown': {'mode': 'disabled'}}},
+        ]
+        for additions in invalid:
+            with self.subTest(additions=additions), self.assertRaises(ConfigurationError):
+                ApiConfig.from_mapping({**self.values, **additions})
+
+    def test_cleanup_rejects_overlapping_roots_and_protected_presets_or_database(self):
+        invalid = [
+            {'outputDirectory': str(self.root)},
+            {'presetsDirectory': str(self.root / 'Logs' / 'Presets')},
+            {'logsDirectory': str(self.root / 'Presets' / 'nested')},
+            {'databasePath': str(self.root / 'Logs' / 'studio.db')},
+            {'logsDirectory': str(Path(self.root.anchor))},
+            {'logsDirectory': str(Path.home())},
+        ]
+        for additions in invalid:
+            with self.subTest(additions=additions), self.assertRaises(ConfigurationError):
+                ApiConfig.from_mapping({**self.values, **additions,
+                                        'cleanup': {'outputs': {'mode': 'age', 'days': 2},
+                                                    'logs': {'mode': 'age', 'days': 3}}})
+
+    def test_disabled_cleanup_does_not_reject_legacy_overlapping_paths(self):
+        config = ApiConfig.from_mapping({**self.values,
+                                         'inputDirectory': str(self.root / 'shared'),
+                                         'outputDirectory': str(self.root / 'shared' / 'outputs'),
+                                         'cleanup': {'logs': {'mode': 'disabled'}}})
+        self.assertEqual(config.input_directory, self.root / 'shared')
