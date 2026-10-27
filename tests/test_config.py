@@ -35,7 +35,7 @@ class ConfigurationTests(unittest.TestCase):
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
-        self.root = Path(self.directory.name)
+        self.root = Path(self.directory.name).resolve()
         self.path = self.root / 'config.json'
         self.values = {
             'databasePath': str(self.root / 'source.sqlite3'),

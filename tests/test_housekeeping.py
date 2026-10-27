@@ -18,7 +18,7 @@ class HousekeepingTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
-        self.root = Path(temporary.name)
+        self.root = Path(temporary.name).resolve()
         for name in ('input', 'output', 'logs'):
             (self.root / name).mkdir()
         self.config_path = self.root / 'config.json'
