@@ -3,7 +3,7 @@
   "info": {
     "title": "MockAíZé API",
     "version": "0.2.1.dev0",
-    "description": "Catálogo e geração de arquivos do MockAíZé. Atualmente o formato implementado é **XML**; por isso as operações ficam em `/api/v1/files/xml`. CSV, JSON e CNAB ainda não estão disponíveis.\n\n**Comece aqui:** use **Authorize** para informar a chave X-API-Key exibida na configuração, consulte o catálogo e copie o ID de uma variação. Depois consulte os modos e modelos de retorno para conferir se estão prontos. Informe esse ID no parâmetro **fileId da URL**, nunca no corpo.\n\n### Entrada e regras do retorno\nVocê pode enviar seu próprio XML no campo **inputXml do body JSON**, mantendo a estrutura da entrada configurada no MockAíZé. Os valores e a quantidade de registros podem mudar. As regras de cópia e os cálculos de entrada usam esse XML; regras de valor fixo, sequência e geração continuam sendo aplicadas conforme a configuração salva. Se **inputXml** e **inputFilePath** forem omitidos, usa o XML de exemplo salvo no banco. A API não modifica o modelo ou a configuração original.\n\n### Três escolhas independentes\n| Campo | O que controla | Opções |\n|---|---|---|\n| inputRecords | Quais registros da entrada participarão do retorno | all (padrão): todos; first: somente o primeiro grupo configurado |\n| returnSelection | Quais modelos de retorno serão executados | type=all: todos os modelos; type=ids: os IDs selecionados |\n| composition | Como juntar os resultados dos modelos | apart (padrão): um XML por modelo; mixed: um XML com registros intercalados, se os modelos forem compatíveis |\n\n**Exemplo funcional:** uma entrada com 10 registros e 2 modelos selecionados gera 2 XMLs de 10 registros em apart, ou 1 XML de 20 registros em mixed. Com inputRecords=first, gera 2 XMLs de 1 registro em apart, ou 1 XML de 2 registros em mixed. O documento de entrada inteiro é validado antes de escolher o primeiro registro.\n\n### Onde receber o resultado\n| delivery | Resultado | Grava em Saídas? |\n|---|---|---|\n| directory (padrão) | JSON com files, nomes, contagens, hashes e tamanhos | Sim |\n| content | JSON com os mesmos metadados e **files[].content**, contendo o XML completo de cada resultado | Não |\n| inline | XML diretamente no corpo HTTP, com nome no cabeçalho Content-Disposition | Não; exige exatamente um XML final |\n\nA entrega **content** aceita vários modelos separados na mesma resposta. Para reutilizar o XML, leia `files[n].content` como string JSON; as aspas e quebras escapadas pertencem ao transporte JSON. Todos os caminhos de diretório são do **servidor**, não do computador cliente.\n\n**Limites:** novos registros de 1 a 500; XML de entrada até 2 MB em UTF-8; até 20 modelos selecionados; saída total até 100 MB. Em delivery=content, o JSON completo também deve caber em 100 MB; reduza a geração ou use directory se exceder. Modelos e XMLs incompatíveis geram erro 422 com Problem Details.\n\nA documentação e seus recursos são instalados localmente e funcionam sem internet. A interface não persiste a chave de API ao recarregar."
+    "description": "Catalogo e geracao XML pelo SQLite do MockAiZe em somente leitura. CSV, JSON e CNAB indisponiveis. Presets XML/OLD aguardam o Site; esta versao depende do banco.\n\nAutenticacao obrigatoria por padrao: uma alternativa, X-API-Key OU Bearer opaco. Nao envie ambos (400). POST /api/v1/auth/token exige API key valida e JSON {}, inclusive quando authentication.required=false. Bearer dura 1.800 segundos, sem refresh, usuarios ou senhas, e e invalidado no restart/rotacao. Autenticacao opcional permite ausencia, mas credencial fornecida invalida/expirada retorna 401. Health e documentacao sao publicos. Swagger offline nao persiste credenciais; no campo Bearer cole somente o token.\n\nfileId somente na URL. new exige recordCount inteiro positivo. return exige inputXml string nao vazia e returnSelection, sem inputFilePath ou fallback de entrada salva. Valida estrutura e quantidade total da fonte antes de inputRecords=first. returnSelection=all inclui todos os modelos salvos e falha se algum nao estiver pronto. apart gera um XML por modelo; mixed intercala se compativeis. 10 registros e 2 modelos geram 2 XMLs de 10 ou 1 de 20, sem novo teto agregado.\n\nEntregas: directory grava em Saidas e retorna metadados; content retorna files[].content sem gravar; inline retorna um unico XML. Caminhos sao do servidor. Entrada e registros: default/custom/disabled; padroes 2.000.000 bytes UTF-8 decodificados e 500 registros. Sem teto global de bytes de saida ou teto oculto de 12 MiB no JSON de geracao. Preservados parser seguro, limites semanticos de formulas, 20 modelos, timeout, taxa e concorrencia. Politicas sao aplicadas por parada/reinicio no configurador.\n\nIdempotency-Key tem escopo por operacao (new/return). Mesma operacao/chave/corpo preserva resposta; corpo/fileId diferente na mesma operacao retorna 409. Replay directory verifica hash/tamanho: ausente ou substituido retorna 410 OUTPUT_EXPIRED, sem regenerar ou avancar sequencial; acesso indisponivel retorna 503. Content/inline persistidos nao dependem de Saidas.\n\nErros application/json: error.code/message/traceId, status numerico apenas HTTP; xmlPath/reason publicos na raiz. traceId corresponde a X-Request-ID e ao log; replay de erro preserva corpo/trace original. Health mantem status textual ok/unavailable.\n\nLimpeza: uma rodada cancelavel no startup, sem agenda diaria ou limpeza no logwrite. Inputs/outputs disabled por padrao; logs 30 dias ou retencao legada. Por pasta: disabled ou age com days inteiro >=1. Data local de mtime estritamente anterior a data inicial menos N dias; igualdade preservada. Arquivos regulares de qualquer origem/extensao e descendentes; nao remove diretorios nem atravessa links/juncoes/reparse points. Protege config/credenciais/estado/banco/binarios/perfis/presets reservados. Entradas exige opt-in. Retentativas pertencem a mesma rodada e o scan nao bloqueia chamadas normais."
   },
   "servers": [
     {
@@ -19,11 +19,17 @@
     },
     {
       "name": "Geração XML"
+    },
+    {
+      "name": "Autenticacao"
     }
   ],
   "security": [
     {
       "ApiKey": []
+    },
+    {
+      "Bearer": []
     }
   ],
   "paths": {
@@ -347,7 +353,7 @@
         ],
         "operationId": "generateNewXml",
         "summary": "Gerar novos registros XML",
-        "description": "Gera de 1 a 500 registros conforme as regras da variação XML salva. Informe fileId somente na URL. Escolha delivery=directory para gravar em Saídas, content para obter files[].content em JSON ou inline para receber XML diretamente. Não aceita inputXml nem inputRecords: esses campos pertencem ao modo de retorno.",
+        "description": "recordCount inteiro positivo, padrao 500, custom ou disabled. fileId somente na URL; nao aceita inputXml/inputFilePath/inputRecords/seed/context. delivery define directory/content/inline.",
         "parameters": [
           {
             "name": "fileId",
@@ -366,7 +372,7 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": false,
-            "description": "Opcional. Repetir a mesma operação com a mesma chave e corpo reaproveita a resposta. Outra solicitação com a mesma chave gera 409. Use uma chave nova para cada geração lógica.",
+            "description": "Escopo por operacao: mesma operacao/chave/corpo preserva resposta; outro corpo/fileId na mesma operacao da 409. Arquivo removido/alterado da 410 sem regenerar.",
             "schema": {
               "type": "string",
               "minLength": 1,
@@ -495,6 +501,9 @@
           },
           "503": {
             "$ref": "#/components/responses/ServiceUnavailable"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           }
         }
       }
@@ -506,7 +515,7 @@
         ],
         "operationId": "generateReturnXml",
         "summary": "Gerar retorno XML",
-        "description": "Gera retornos com as regras salvas, usando o XML do body (inputXml), um arquivo de Entradas (inputFilePath), ou o modelo salvo quando nenhuma entrada for enviada. inputRecords seleciona registros de entrada; returnSelection seleciona modelos. As regras de cópia/cálculo usam os valores dessa entrada; os demais geradores configurados continuam funcionando. Com delivery=content, cada item de files contém fileName e content com o XML completo, sem leitura de arquivos no cliente. Todos os modelos selecionados precisam estar prontos. inputXml e inputFilePath são mutuamente exclusivos; inputRecords=first também exige que todo o XML seja estruturalmente válido.",
+        "description": "inputXml e returnSelection obrigatorios. Sem entrada salva ou inputFilePath. Valida e limita toda a fonte antes de first. Todos os modelos selecionados precisam estar prontos; mixed nao impoe limite agregado. delivery define entrega.",
         "parameters": [
           {
             "name": "fileId",
@@ -525,7 +534,7 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": false,
-            "description": "Opcional. Repetir a mesma operação com a mesma chave e corpo reaproveita a resposta. Outra solicitação com a mesma chave gera 409. Use uma chave nova para cada geração lógica.",
+            "description": "Escopo por operacao: mesma operacao/chave/corpo preserva resposta; outro corpo/fileId na mesma operacao da 409. Arquivo removido/alterado da 410 sem regenerar.",
             "schema": {
               "type": "string",
               "minLength": 1,
@@ -542,22 +551,11 @@
                 "$ref": "#/components/schemas/ReturnXmlRequest"
               },
               "examples": {
-                "modelo_salvo": {
-                  "summary": "Usar todos os registros do modelo salvo e gravar XMLs em Saídas",
-                  "value": {
-                    "returnSelection": {
-                      "type": "all"
-                    },
-                    "inputRecords": "all",
-                    "composition": "apart",
-                    "delivery": "directory"
-                  }
-                },
                 "xml_enviado_todos": {
                   "summary": "Enviar XML próprio e receber todos os retornos em JSON",
                   "description": "XML ilustrativo; substitua por um XML compatível com sua configuração.",
                   "value": {
-                    "inputXml": "<Document><Record><Value>valor-do-cliente-1</Value></Record><Record><Value>valor-do-cliente-2</Value></Record></Document>",
+                    "inputXml": "<Document><Record><Value>valor-1</Value></Record><Record><Value>valor-2</Value></Record></Document>",
                     "inputRecords": "all",
                     "returnSelection": {
                       "type": "all"
@@ -570,7 +568,7 @@
                   "summary": "Enviar XML próprio e usar somente seu primeiro registro",
                   "description": "Retorna um documento de um registro por modelo, dentro de files[].content. Substitua o XML ilustrativo.",
                   "value": {
-                    "inputXml": "<Document><Record><Value>valor-do-cliente-1</Value></Record><Record><Value>valor-do-cliente-2</Value></Record></Document>",
+                    "inputXml": "<Document><Record><Value>valor-1</Value></Record><Record><Value>valor-2</Value></Record></Document>",
                     "inputRecords": "first",
                     "returnSelection": {
                       "type": "all"
@@ -582,7 +580,7 @@
                 "xml_misto": {
                   "summary": "Todos os registros, modelos intercalados em um XML",
                   "value": {
-                    "inputXml": "<Document><Record><Value>valor-do-cliente-1</Value></Record><Record><Value>valor-do-cliente-2</Value></Record></Document>",
+                    "inputXml": "<Document><Record><Value>valor-1</Value></Record><Record><Value>valor-2</Value></Record></Document>",
                     "inputRecords": "all",
                     "returnSelection": {
                       "type": "all"
@@ -593,17 +591,30 @@
                 },
                 "modelo_especifico": {
                   "summary": "Escolher um modelo e receber o XML diretamente",
-                  "description": "Substitua modelo-retorno-id por um ID retornado na consulta de modelos.",
+                  "description": "ret-a pertence a fixture sintetica. Substitua pelo ID da consulta de modelos.",
                   "value": {
                     "returnSelection": {
                       "type": "ids",
                       "ids": [
-                        "modelo-retorno-id"
+                        "ret-a"
                       ]
                     },
                     "inputRecords": "all",
                     "composition": "apart",
-                    "delivery": "inline"
+                    "delivery": "inline",
+                    "inputXml": "<Document><Record><Value>valor-1</Value></Record><Record><Value>valor-2</Value></Record></Document>"
+                  }
+                },
+                "pasta": {
+                  "summary": "Enviar XML e gravar um retorno por modelo em Saidas",
+                  "value": {
+                    "returnSelection": {
+                      "type": "all"
+                    },
+                    "inputRecords": "all",
+                    "composition": "apart",
+                    "delivery": "directory",
+                    "inputXml": "<Document><Record><Value>valor-1</Value></Record><Record><Value>valor-2</Value></Record></Document>"
                   }
                 }
               }
@@ -697,6 +708,71 @@
           },
           "503": {
             "$ref": "#/components/responses/ServiceUnavailable"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/token": {
+      "post": {
+        "tags": [
+          "Autenticacao"
+        ],
+        "operationId": "issueToken",
+        "summary": "Emitir Bearer por 30 minutos",
+        "description": "API key valida e JSON {} obrigatorios mesmo com autenticacao opcional. Nao aceita Bearer para emitir token. Sem refresh/usuarios/senhas. Body ate 4 KiB.",
+        "security": [
+          {
+            "ApiKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenRequest"
+              },
+              "example": {}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Token emitido; evento LOGIN_SUCCESS sem credenciais.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
           }
         }
       }
@@ -708,7 +784,12 @@
         "type": "apiKey",
         "in": "header",
         "name": "X-API-Key",
-        "description": "Chave exibida ao criar a configuração da API. Nenhuma chave real é incluída nesta documentação."
+        "description": "Chave da instalacao, alternativa ao Bearer. Nao enviar ambos."
+      },
+      "Bearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Token opaco de login, nao JWT. Cole sem prefixo Bearer; nao combinar com API key."
       }
     },
     "schemas": {
@@ -877,8 +958,8 @@
           "recordCount": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 500,
-            "example": 100
+            "example": 100,
+            "description": "Inteiro positivo; padrao 500, limite customizavel ou desabilitado pela politica."
           },
           "delivery": {
             "type": "string",
@@ -942,20 +1023,15 @@
             }
           }
         ],
-        "description": "Seleciona modelos de retorno, não registros de entrada. Use inputRecords para escolher todos os registros ou apenas o primeiro."
+        "description": "Seleciona modelos, nao registros. all inclui todos os modelos salvos e falha se algum nao estiver pronto; ids seleciona explicitamente."
       },
       "ReturnXmlRequest": {
         "type": "object",
         "additionalProperties": false,
         "required": [
+          "inputXml",
           "returnSelection"
         ],
-        "not": {
-          "required": [
-            "inputXml",
-            "inputFilePath"
-          ]
-        },
         "properties": {
           "returnSelection": {
             "$ref": "#/components/schemas/ReturnSelection"
@@ -972,12 +1048,7 @@
           "inputXml": {
             "type": "string",
             "minLength": 1,
-            "description": "XML completo enviado pelo cliente no corpo JSON, até 2 MB em UTF-8. A estrutura deve ser compatível com a entrada configurada; valores e quantidade de registros podem mudar. As regras salvas de cópia e cálculo de entrada passam a usar estes valores. Não combinar com inputFilePath. Se ambas as entradas forem omitidas, usa o XML de exemplo salvo no banco."
-          },
-          "inputFilePath": {
-            "type": "string",
-            "minLength": 1,
-            "description": "Caminho absoluto de um XML contido no diretório Entradas configurado no servidor. O arquivo deve existir e ser acessível pelo serviço. Não é um upload nem um caminho do computador cliente. Não combinar com inputXml."
+            "description": "Obrigatorio, nao vazio. XML completo compativel com o modelo salvo. Bytes UTF-8 decodificados: padrao 2.000.000, custom ou disabled. Sem arquivo ou entrada salva como substituicao."
           },
           "delivery": {
             "type": "string",
@@ -1001,7 +1072,7 @@
               "first"
             ],
             "default": "all",
-            "description": "all gera para todos os registros do XML de entrada; first usa somente o primeiro grupo de registro configurado. Vale para inputXml, inputFilePath e para o modelo salvo. O XML inteiro é validado antes da seleção. Não confundir com returnSelection, que escolhe modelos de retorno."
+            "description": "all usa todos; first usa somente o primeiro apos validar a estrutura e limitar o total da fonte. Modelos multiplos nao criam limite agregado."
           }
         }
       },
@@ -1121,39 +1192,72 @@
           }
         }
       },
-      "Problem": {
+      "ErrorResponse": {
         "type": "object",
+        "additionalProperties": false,
         "required": [
-          "type",
-          "title",
-          "status",
-          "detail",
-          "code",
-          "requestId"
+          "error"
         ],
         "properties": {
-          "type": {
+          "error": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "code",
+              "message",
+              "traceId"
+            ],
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "traceId": {
+                "type": "string"
+              }
+            }
+          },
+          "xmlPath": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "TokenRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Objeto JSON vazio, sem usuario/senha."
+      },
+      "TokenResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "access_token",
+          "token_type",
+          "expires_in"
+        ],
+        "properties": {
+          "access_token": {
             "type": "string",
-            "example": "about:blank"
+            "minLength": 1,
+            "description": "Token opaco em memoria; nao persistir nem registrar."
           },
-          "title": {
-            "type": "string"
-          },
-          "status": {
-            "type": "integer"
-          },
-          "detail": {
-            "type": "string"
-          },
-          "code": {
-            "type": "string"
-          },
-          "requestId": {
+          "token_type": {
             "type": "string",
-            "format": "uuid"
+            "enum": [
+              "Bearer"
+            ]
           },
-          "xmlPath": {},
-          "reason": {}
+          "expires_in": {
+            "type": "integer",
+            "enum": [
+              1800
+            ]
+          }
         }
       }
     },
@@ -1162,34 +1266,34 @@
         "description": "Campos, tipos, filtros ou limites inválidos. fileId deve ser enviado somente na URL.",
         "headers": {
           "X-Request-ID": {
-            "description": "Identificador da requisição para consulta dos logs.",
+            "description": "traceId da resposta; replay de erro preserva o identificador original.",
             "schema": {
               "type": "string"
             }
           }
         },
         "content": {
-          "application/problem+json": {
+          "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/Problem"
+              "$ref": "#/components/schemas/ErrorResponse"
             }
           }
         }
       },
       "Unauthorized": {
-        "description": "X-API-Key ausente ou inválida.",
+        "description": "Credencial ausente quando obrigatoria, invalida ou expirada. Login sempre exige API key valida.",
         "headers": {
           "X-Request-ID": {
-            "description": "Identificador da requisição para consulta dos logs.",
+            "description": "traceId da resposta; replay de erro preserva o identificador original.",
             "schema": {
               "type": "string"
             }
           }
         },
         "content": {
-          "application/problem+json": {
+          "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/Problem"
+              "$ref": "#/components/schemas/ErrorResponse"
             }
           }
         }
@@ -1198,16 +1302,16 @@
         "description": "Arquivo, modelo de retorno ou rota não encontrado. Formatos ainda não implementados retornam 404.",
         "headers": {
           "X-Request-ID": {
-            "description": "Identificador da requisição para consulta dos logs.",
+            "description": "traceId da resposta; replay de erro preserva o identificador original.",
             "schema": {
               "type": "string"
             }
           }
         },
         "content": {
-          "application/problem+json": {
+          "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/Problem"
+              "$ref": "#/components/schemas/ErrorResponse"
             }
           }
         }
@@ -1216,7 +1320,7 @@
         "description": "Método incompatível com a rota. Consulte o cabeçalho Allow.",
         "headers": {
           "X-Request-ID": {
-            "description": "Identificador da requisição para consulta dos logs.",
+            "description": "traceId da resposta; replay de erro preserva o identificador original.",
             "schema": {
               "type": "string"
             }
@@ -1228,45 +1332,45 @@
           }
         },
         "content": {
-          "application/problem+json": {
+          "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/Problem"
+              "$ref": "#/components/schemas/ErrorResponse"
             }
           }
         }
       },
       "Conflict": {
-        "description": "Revisão divergente ou conflito de Idempotency-Key.",
+        "description": "Revisao divergente, idempotencia em andamento, ou mesma operacao/chave com outro corpo/fileId.",
         "headers": {
           "X-Request-ID": {
-            "description": "Identificador da requisição para consulta dos logs.",
+            "description": "traceId da resposta; replay de erro preserva o identificador original.",
             "schema": {
               "type": "string"
             }
           }
         },
         "content": {
-          "application/problem+json": {
+          "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/Problem"
+              "$ref": "#/components/schemas/ErrorResponse"
             }
           }
         }
       },
       "PayloadTooLarge": {
-        "description": "Entrada, corpo ou saída excede o limite permitido.",
+        "description": "XML decodificado excede o limite configurado, ou body de login excede 4 KiB. Sem teto global de saida.",
         "headers": {
           "X-Request-ID": {
-            "description": "Identificador da requisição para consulta dos logs.",
+            "description": "traceId da resposta; replay de erro preserva o identificador original.",
             "schema": {
               "type": "string"
             }
           }
         },
         "content": {
-          "application/problem+json": {
+          "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/Problem"
+              "$ref": "#/components/schemas/ErrorResponse"
             }
           }
         }
@@ -1275,16 +1379,16 @@
         "description": "Envie o corpo como application/json.",
         "headers": {
           "X-Request-ID": {
-            "description": "Identificador da requisição para consulta dos logs.",
+            "description": "traceId da resposta; replay de erro preserva o identificador original.",
             "schema": {
               "type": "string"
             }
           }
         },
         "content": {
-          "application/problem+json": {
+          "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/Problem"
+              "$ref": "#/components/schemas/ErrorResponse"
             }
           }
         }
@@ -1293,16 +1397,16 @@
         "description": "Modelo, configuração, XML de entrada, nome gerado ou entrega incompatível. Todos os modelos selecionados precisam estar prontos.",
         "headers": {
           "X-Request-ID": {
-            "description": "Identificador da requisição para consulta dos logs.",
+            "description": "traceId da resposta; replay de erro preserva o identificador original.",
             "schema": {
               "type": "string"
             }
           }
         },
         "content": {
-          "application/problem+json": {
+          "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/Problem"
+              "$ref": "#/components/schemas/ErrorResponse"
             }
           }
         }
@@ -1311,7 +1415,7 @@
         "description": "Limite de requisições ou concorrência atingido. Tente novamente após Retry-After.",
         "headers": {
           "X-Request-ID": {
-            "description": "Identificador da requisição para consulta dos logs.",
+            "description": "traceId da resposta; replay de erro preserva o identificador original.",
             "schema": {
               "type": "string"
             }
@@ -1324,9 +1428,9 @@
           }
         },
         "content": {
-          "application/problem+json": {
+          "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/Problem"
+              "$ref": "#/components/schemas/ErrorResponse"
             }
           }
         }
@@ -1335,16 +1439,16 @@
         "description": "Falha interna ou falha parcial de publicação. Consulte os logs com X-Request-ID.",
         "headers": {
           "X-Request-ID": {
-            "description": "Identificador da requisição para consulta dos logs.",
+            "description": "traceId da resposta; replay de erro preserva o identificador original.",
             "schema": {
               "type": "string"
             }
           }
         },
         "content": {
-          "application/problem+json": {
+          "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/Problem"
+              "$ref": "#/components/schemas/ErrorResponse"
             }
           }
         }
@@ -1353,16 +1457,33 @@
         "description": "Banco, diretórios, logs ou processador indisponível; geração excedeu o tempo limite; ou serviço em encerramento.",
         "headers": {
           "X-Request-ID": {
-            "description": "Identificador da requisição para consulta dos logs.",
+            "description": "traceId da resposta; replay de erro preserva o identificador original.",
             "schema": {
               "type": "string"
             }
           }
         },
         "content": {
-          "application/problem+json": {
+          "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/Problem"
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "Gone": {
+        "description": "OUTPUT_EXPIRED: arquivo directory ausente ou alterado em tamanho/hash; sem regeneracao ou avanco de contador.",
+        "headers": {
+          "X-Request-ID": {
+            "schema": {
+              "type": "string"
+            }
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
             }
           }
         }

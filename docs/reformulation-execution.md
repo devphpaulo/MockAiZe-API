@@ -22,8 +22,8 @@ Referência: pacote `tasks/refinamento/planos-api-site-reformulations`, lido int
 | API-05 | API-01..04; Site para integração real | Ye | Adiada por orientação do usuário | Ver `Continuar após implementação do site.md` |
 | API-06 | API-01..04; XML/OLD adiado pelo usuário | Ye | Concluída no recorte independente | 223 testes, 222 aprovados e 1 ignorado; Dan sem bloqueantes; Luda APROVADO COM RISCO |
 | API-07 | Tarefas API anteriores, exceto XML/OLD adiado | Oliver | Concluída no recorte independente | 238 testes, 237 aprovados e 1 ignorado; Config/Setup compilados; Dan sem bloqueantes; Luda APROVADO COM RISCO |
-| API-08 | Tarefas API implementadas; integração Site adiada pelo usuário | Oliver | Em execução | Documentação e compatibilidade do comportamento disponível |
-| API-FV | API-08 + SITE-06 | Dan/Luda/Yorke | Pendente | Verificação final e integração |
+| API-08 | Tarefas API implementadas; integração Site adiada pelo usuário | Oliver | Concluída no recorte disponível | 243 testes, 242 aprovados e 1 ignorado; build/pacotes/smoke reais aprovados; Dan sem bloqueantes; Luda APROVADO COM RISCO |
+| API-FV | API-08; SITE-06 para integração conjunta | Dan/Luda; smoke funcional | Recorte API verificado; integração conjunta adiada | Executável real e pacotes aprovados; limites descritos abaixo |
 
 As edições são sequenciais; o coordenador revisa diff e validação antes da próxima tarefa.
 Integração real com o produtor Site e smoke nativo compilado precisam de evidência própria para serem declarados concluídos.
@@ -72,3 +72,21 @@ Concluída em 27/10/2026. O assistente existente recebeu autenticação, limites
 - Teste de ACL real somente em pasta temporária comprovou herança e remoção de DELETE nos arquivos existentes, preservando as permissões do usuário. A mudança de pasta e o rollback revogam o grant correspondente.
 - A falha de revogação não impede restaurar a configuração anterior; falha ao restaurar JSON ou configuração do serviço impede o reinício e produz diagnóstico sanitizado. Não iniciar com uma configuração nova que deveria ter sido revertida.
 - Config e Setup compilados pelo Inno. O runner de instalação/reparo/desinstalação foi atualizado, mas não executado nesta máquina. Instalação nativa completa e SMB continuam para ambiente descartável apropriado.
+
+## API-08: documentação e validação final da API
+
+Evidências de 27/10/2026:
+
+- README, OpenAPI e coleção Bruno atualizados para o comportamento implementado: inputXml obrigatório, autenticação alternativa, erro aninhado, políticas configuráveis, limpeza startup e replay expirado. XML/OLD e sua configuração permanecem explicitamente pendentes do Site.
+- Ambiente de exemplo Bruno sobrescrito com modelo sem credencial; nenhum valor anterior foi necessário para essa alteração. O request personalizado `Gerar - Retorno primeiro registro.bru` permaneceu byte a byte idêntico ao hash capturado antes da API-08 e fora dos commits da implementação.
+- Suíte Python 3.14 com ResourceWarning como erro: 243 testes, 242 aprovados e 1 ignorado. O caso ignorado depende da permissão de criar symlink no teste legado de desinstalação; os testes reais de junction da limpeza foram executados.
+- Cinco testes novos de contrato verificam referências locais do OpenAPI, autenticação, schemas, erros e exemplos executados no motor com dados sintéticos. Não foi utilizado validador OpenAPI externo.
+- Build completo aprovado: serviço, Config, Setup e desinstalador; inventário de binários, arquitetura, ícones, recursos Swagger offline, licenças e limites de tamanho conferidos pelo verificador existente. Instalador gerado em `release/MockAiZe-API-Setup.exe`.
+- Sdist e wheel gerados em ambiente isolado com as dependências declaradas. Wheel instalado em venv temporário fora do checkout, com CLI e importação do pacote aprovados.
+- Smoke do executável real aprovado, sem instalar serviço: login Bearer/1800 segundos, 1.000 registros com política customizada, entrada acima do default com teto customizado de 3 MB, apart/mixed/content/inline, inputXml obrigatório, erro/trace, limpeza somente no startup com fronteira de data e inputs desativados, replay 410 sem avanço do sequencial e replay content preservado.
+
+Logs locais: `build/api08-validation.txt`, `build/api08-build.txt`, `build/api08-package-build.txt`, `build/api08-wheel-install.txt` e `build/api08-frozen-smoke.txt`.
+
+Limites remanescentes: somente Python 3.14 disponível localmente; Python 3.11 segue no workflow existente. Não executados nesta máquina: ciclo completo de instalação nativa/SCM, SMB real, interface Bruno, validador OpenAPI externo e integração com o Site. O build foi local; não houve publicação de release.
+
+Parecer final independente: Dan SEM ACHADOS BLOQUEANTES; Luda APROVADO COM RISCO para API-08 e API-FV no recorte implementado. O parecer conferiu testes, build, pacotes e smoke; não executou testes adicionais. A integração conjunta continua registrada em `Continuar após implementação do site.md`.
