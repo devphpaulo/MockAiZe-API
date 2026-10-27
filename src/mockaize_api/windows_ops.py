@@ -6,10 +6,12 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import time
 from urllib.request import ProxyHandler, build_opener
 
 from .config import ApiConfig, ConfigurationError, load_config, save_config
+from .policy import Policy
 from .windows_service import REGISTRY_KEY, SERVICE_NAME
 
 FIREWALL_RULE = 'MockAiZe API HTTP'
@@ -18,6 +20,23 @@ CONFIG_EXE = 'MockAiZeApiConfig.exe'
 UNINSTALL_EXE = 'MockAiZeApiUninstall.exe'
 SERVICE_ACCOUNT = r'NT AUTHORITY\NetworkService'
 SERVICE_SID = '*S-1-5-20'  # NetworkService; presents the computer account on SMB.
+
+
+class ConfigurationRollbackError(RuntimeError):
+    """Fixed public diagnostic, retaining the original and rollback failures privately."""
+    def __init__(self, original_error, failures):
+        self.original_error = original_error
+        self.rollback_errors = tuple(failures)
+        permissions = any(stage == 'input_permissions' for stage, _ in failures)
+        incomplete = any(stage != 'input_permissions' for stage, _ in failures)
+        if incomplete:
+            message = 'A operação falhou e a restauração ficou incompleta. Verifique a configuração e o serviço.'
+        else:
+            message = 'A configuração anterior foi restaurada e o reinício do serviço foi solicitado.'
+        if permissions:
+            message += (' A permissão de exclusão da nova pasta de entradas pode permanecer ativa.'
+                        ' Revise essa permissão antes de tentar novamente.')
+        super().__init__(message)
 
 
 def _is_network_path(path: Path) -> bool:
@@ -57,6 +76,15 @@ class Installation:
     directory: Path
     config_path: Path
     origins: str = 'LocalSubnet'
+
+
+def validate_operational_policy(installation: Installation, config: ApiConfig) -> None:
+    """Reject unsafe effective policies before touching folders, ACLs or SCM."""
+    validated = ApiConfig.from_mapping(config.to_mapping())
+    Policy.load(installation.config_path).resolve(
+        validated, config_path=installation.config_path,
+        protected_paths=(installation.directory.resolve(), Path(__file__).resolve().parent,
+                         Path(sys.executable).resolve().parent))
 
 
 def validate_origins(value: str) -> str:
@@ -116,6 +144,7 @@ class Installer:
                 invalid_config = config_path.read_bytes()
         if config is None:
             raise ValueError('A instalação nova exige configuração.')
+        validate_operational_policy(self.installation, config)
         for executable in (SERVICE_EXE, CONFIG_EXE, UNINSTALL_EXE):
             if not (payload / executable).is_file():
                 raise RuntimeError('O pacote do instalador está incompleto. Baixe uma versão íntegra.')
@@ -200,27 +229,57 @@ class Installer:
         return token
 
     def change_config(self, config: ApiConfig, origins: str) -> None:
+        validate_operational_policy(self.installation, config)
         old = load_config(self.installation.config_path)
         self.driver.stop()
         self.require_stopped()
         from .preflight import check_environment
+        new_inputs_touched = False
         try:
             installation = Installation(self.installation.directory, self.installation.config_path,
                                         validate_origins(origins))
             for directory in (config.input_directory, config.output_directory, config.logs_directory):
                 directory.mkdir(parents=True, exist_ok=True)
             check_environment(config)
+            if old.input_directory != config.input_directory and old.cleanup.inputs.mode == 'age':
+                self.driver.revoke_input_delete(old, self.installation.config_path.parent)
             save_config(installation.config_path, config)
+            new_inputs_touched = old.input_directory != config.input_directory and config.cleanup.inputs.mode == 'age'
             self.driver.configure(installation, config)
             self.driver.start()
             wait_health(config)
-        except Exception:
+        except Exception as original_error:
             self.driver.stop()
             self.require_stopped()
-            save_config(self.installation.config_path, old)
-            self.driver.configure(self.installation, old)
-            self.driver.start()
+            self._restore_configuration(old, config, new_inputs_touched, original_error)
             raise
+
+    def _restore_configuration(self, old, new, new_inputs_touched, original_error):
+        failures = []
+        if new_inputs_touched:
+            try:
+                self.driver.revoke_input_delete(new, self.installation.config_path.parent)
+            except Exception as error:
+                failures.append(('input_permissions', error))
+        steps = (
+            ('configuration', lambda: save_config(self.installation.config_path, old)),
+            ('service_configuration', lambda: self.driver.configure(self.installation, old)),
+        )
+        for stage, restore in steps:
+            try:
+                restore()
+            except Exception as error:
+                failures.append((stage, error))
+        # Never start with the new JSON or an uncertain service configuration.
+        # A residual permission failure alone does not prevent the old service
+        # from restarting, but failed restoration must leave it stopped.
+        if not any(stage != 'input_permissions' for stage, _ in failures):
+            try:
+                self.driver.start()
+            except Exception as error:
+                failures.append(('service_start', error))
+        if failures:
+            raise ConfigurationRollbackError(original_error, failures) from failures[-1][1]
 
     def uninstall(self) -> None:
         self.driver.stop()
@@ -302,17 +361,10 @@ class WindowsDriver:
             self.run('icacls.exe', str(installation.directory), '/grant', f'{SERVICE_SID}:(OI)(CI)RX')
         # Only local configured trees receive local SID grants. Remote SMB
         # permissions are controlled by the share and the machine account.
-        for directory in (config.input_directory, config.database_path.parent):
+        for directory in (config.database_path.parent,):
             if not _is_network_path(directory):
                 self.run('icacls.exe', str(directory), '/grant', f'{SERVICE_SID}:(OI)(CI)RX')
-        # The default input lives below the writable data root. Remove inherited
-        # permissions from that subtree: the service can read files, and the
-        # installing user can add/manage them without granting the service writes.
-        if not _is_network_path(config.input_directory) and config.input_directory.is_relative_to(root):
-            user_sid = _current_user_sid()
-            self.run('icacls.exe', str(config.input_directory), '/inheritance:r', '/grant:r',
-                     '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F',
-                     f'*{user_sid}:(OI)(CI)M', f'{SERVICE_SID}:(OI)(CI)RX')
+        self.configure_inputs(config, root)
         for directory in (config.output_directory, config.logs_directory):
             if not _is_network_path(directory):
                 self.run('icacls.exe', str(directory), '/grant', f'{SERVICE_SID}:(OI)(CI)M')
@@ -321,6 +373,34 @@ class WindowsDriver:
         # profile, OneDrive root, or other unrelated ancestors.
         self.firewall(config, installation.origins, executable)
         self.register_shell(installation)
+
+    def configure_inputs(self, config: ApiConfig, root: Path, *, allow_delete=True) -> None:
+        if _is_network_path(config.input_directory):
+            return
+        # Replace only this SID's explicit grant, also removing a previous
+        # cleanup delete grant when the policy is disabled again.
+        # /grant:r alone does not clear a separate inherit-only delete ACE.
+        # Remove this service SID's explicit grants, then restore its read grant.
+        # Other SIDs, including the user's explicit rights, are untouched.
+        self.run('icacls.exe', str(config.input_directory), '/remove:g', SERVICE_SID)
+        self.run('icacls.exe', str(config.input_directory), '/grant:r', f'{SERVICE_SID}:(OI)(CI)RX')
+        # The default input lives below the writable data root. Remove inherited
+        # permissions from that subtree: the service can read files, and the
+        # installing user can add/manage them without granting the service writes.
+        if config.input_directory.is_relative_to(root):
+            user_sid = _current_user_sid()
+            self.run('icacls.exe', str(config.input_directory), '/inheritance:r', '/grant:r',
+                     '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F',
+                     f'*{user_sid}:(OI)(CI)M', f'{SERVICE_SID}:(OI)(CI)RX')
+        if allow_delete and config.cleanup.inputs.mode == 'age':
+            # Delete applies to inherited file objects, without granting write,
+            # create, full control or delete access on the configured root.
+            self.run('icacls.exe', str(config.input_directory), '/grant', f'{SERVICE_SID}:(OI)(IO)(DE)')
+
+    def revoke_input_delete(self, config: ApiConfig, root: Path) -> None:
+        if _is_network_path(config.input_directory) or not config.input_directory.exists():
+            return
+        self.configure_inputs(config, root, allow_delete=False)
 
     def firewall(self, config, origins, executable):
         # Exact product rule name only; never disable the firewall or touch unrelated rules.

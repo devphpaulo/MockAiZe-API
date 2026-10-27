@@ -16,11 +16,13 @@ import tempfile
 from .catalog import Catalog
 from .config import ApiConfig, ConfigurationError, FIELD_NAMES, load_config
 from .errors import ApiError
+from .policy import Policy
 from .preflight import PreflightError, check_environment
 from .uninstall import UninstallSession, checked_directory, discover_uninstall_target
-from .windows_ops import (SERVICE_EXE, Installation, Installer, WindowsDriver,
+from .windows_ops import (SERVICE_EXE, ConfigurationRollbackError, Installation, Installer, WindowsDriver,
                           _is_mapped_network_drive, _is_network_path,
                           discover_installation, validate_origins, wait_health)
+from .windows_ops import validate_operational_policy
 
 
 OPERATIONS = ('inspect', 'validate', 'stop', 'start', 'restart', 'install',
@@ -114,6 +116,22 @@ def _configuration(request, installation: Installation | None) -> ApiConfig:
     for name in FIELD_NAMES:
         if name in request:
             values[name] = request[name]
+    if 'authenticationRequired' in request:
+        required = request['authenticationRequired']
+        if required not in ('true', 'false'):
+            raise MaintenanceError('Use true ou false para a obrigatoriedade de autenticação.')
+        values['authentication'] = {'required': required == 'true'}
+    limits = dict(values.get('limits', {}))
+    for name, mode_name, amount_name, unit in (
+            ('inputXml', 'inputXmlMode', 'inputXmlBytes', 'bytes'),
+            ('records', 'recordsMode', 'recordsCount', 'count')):
+        _policy_request(request, limits, name, mode_name, amount_name, unit)
+    values['limits'] = limits
+    cleanup = dict(values.get('cleanup', {}))
+    for name in ('inputs', 'outputs', 'logs'):
+        prefix = 'cleanup' + name.title()
+        _policy_request(request, cleanup, name, prefix + 'Mode', prefix + 'Days', 'days')
+    values['cleanup'] = cleanup
     try:
         values['port'] = int(values['port'])
     except (ValueError, KeyError, TypeError):
@@ -131,6 +149,39 @@ def _configuration(request, installation: Installation | None) -> ApiConfig:
     return ApiConfig.from_mapping(mapping)
 
 
+def _policy_request(request, policies, name, mode_name, amount_name, unit):
+    if mode_name not in request and amount_name not in request:
+        return
+    rule = dict(policies.get(name, {'mode': 'default' if unit != 'days' else 'disabled'}))
+    if mode_name in request:
+        rule = {'mode': request[mode_name]}
+    if amount_name in request and rule.get('mode') in ('custom', 'age'):
+        raw = request[amount_name]
+        if not isinstance(raw, str) or not raw.isascii() or not raw.isdecimal():
+            raise MaintenanceError('Informe um inteiro positivo para o valor da política.')
+        rule[unit] = int(raw)
+    policies[name] = rule
+
+
+def configuration_fields(config: ApiConfig, config_path: Path) -> dict:
+    """Flat, non-secret INI fields shared by the native UI and lifecycle runner."""
+    result = {name: value for name, value in config.to_mapping().items() if name in FIELD_NAMES}
+    result['authenticationRequired'] = 'true' if config.authentication.required else 'false'
+    for prefix, rule, default, unit in (
+            ('inputXml', config.limits.input_xml, 2000000, 'Bytes'),
+            ('records', config.limits.records, 500, 'Count')):
+        result[prefix + 'Mode'] = rule.mode
+        result[prefix + unit] = str(rule.value if rule.mode == 'custom' else default)
+    for name in ('inputs', 'outputs', 'logs'):
+        rule = getattr(config.cleanup, name)
+        mode = rule.mode if rule is not None else 'age'
+        days = (rule.days if rule is not None else Policy.load(config_path).logs_retention_days)
+        prefix = 'cleanup' + name.title()
+        result[prefix + 'Mode'] = mode
+        result[prefix + 'Days'] = str(days if days is not None else 30)
+    return result
+
+
 def _snapshot(installation: Installation | None, driver, message='Operação concluída.') -> dict:
     result = {'ok': '1', 'message': message, 'state': driver.status(),
               'restartRequired': '0', 'folderCount': '0'}
@@ -143,7 +194,7 @@ def _snapshot(installation: Installation | None, driver, message='Operação con
         config = load_config(installation.config_path)
     except ConfigurationError:
         return result
-    result.update(config.to_mapping())
+    result.update(configuration_fields(config, installation.config_path))
     result['configValid'] = '1'
     return result
 
@@ -153,7 +204,8 @@ def _folders(result: dict, session: UninstallSession) -> None:
     result.update({f'folder{index}': str(path) for index, path in enumerate(session.folders)})
 
 
-def _prepare(config: ApiConfig) -> None:
+def _prepare(config: ApiConfig, installation: Installation) -> None:
+    validate_operational_policy(installation, config)
     Catalog(config.database_path).check()
     for directory in (config.input_directory, config.output_directory, config.logs_directory):
         directory.mkdir(parents=True, exist_ok=True)
@@ -178,6 +230,7 @@ def execute(operation: str, request, driver=None) -> dict:
         return _snapshot(installation, driver, 'Serviço parado.')
     if operation in ('start', 'restart'):
         config = load_config(installation.config_path)
+        validate_operational_policy(installation, config)
         if operation == 'restart':
             driver.stop()
             Installer(installation, driver).require_stopped()
@@ -217,9 +270,11 @@ def execute(operation: str, request, driver=None) -> dict:
     if operation == 'validate':
         if driver.status() not in ('absent', 'stopped'):
             raise MaintenanceError('Pare explicitamente o serviço antes de verificar a porta e os diretórios.')
-        _prepare(config)
+        target = installation or Installation(_absolute(request.get('installDir', '')),
+                                              _absolute(request.get('configPath', '')), origins)
+        _prepare(config, target)
         result = _snapshot(installation, driver, 'Banco, diretórios, porta e acesso validados.')
-        result.update(config.to_mapping(), origins=origins)
+        result.update(configuration_fields(config, target.config_path), origins=origins)
         return result
     if operation == 'configure':
         Catalog(config.database_path).check()
@@ -255,7 +310,8 @@ def execute(operation: str, request, driver=None) -> dict:
 
 
 def _safe_message(error: Exception) -> str:
-    if isinstance(error, (MaintenanceError, ConfigurationError, PreflightError, ApiError)):
+    if isinstance(error, (MaintenanceError, ConfigurationError, PreflightError, ApiError,
+                          ConfigurationRollbackError)):
         return str(error).replace('\r', ' ').replace('\n', ' ')
     if isinstance(error, subprocess.CalledProcessError):
         command = Path(str(error.cmd[0])).name.casefold() if error.cmd else 'Windows'

@@ -21,8 +21,8 @@ Referência: pacote `tasks/refinamento/planos-api-site-reformulations`, lido int
 | API-04 | API-01..03 | Oliver | Concluída | 201 testes, 200 aprovados e 1 ignorado; Dan sem bloqueantes; Luda APROVADO |
 | API-05 | API-01..04; Site para integração real | Ye | Adiada por orientação do usuário | Ver `Continuar após implementação do site.md` |
 | API-06 | API-01..04; XML/OLD adiado pelo usuário | Ye | Concluída no recorte independente | 223 testes, 222 aprovados e 1 ignorado; Dan sem bloqueantes; Luda APROVADO COM RISCO |
-| API-07 | Tarefas API anteriores, exceto XML/OLD adiado | Oliver | Em execução | Configurador/instalador; configuração de presets permanece pendente do Site |
-| API-08 | API-01..07 + SITE-05 | Oliver | Pendente | Documentação e compatibilidade |
+| API-07 | Tarefas API anteriores, exceto XML/OLD adiado | Oliver | Concluída no recorte independente | 238 testes, 237 aprovados e 1 ignorado; Config/Setup compilados; Dan sem bloqueantes; Luda APROVADO COM RISCO |
+| API-08 | Tarefas API implementadas; integração Site adiada pelo usuário | Oliver | Em execução | Documentação e compatibilidade do comportamento disponível |
 | API-FV | API-08 + SITE-06 | Dan/Luda/Yorke | Pendente | Verificação final e integração |
 
 As edições são sequenciais; o coordenador revisa diff e validação antes da próxima tarefa.
@@ -62,3 +62,13 @@ A consulta sustenta as chamadas de plataforma; somente testes executados sustent
 - Expansão localizada de ownership: `config.py` e `test_config.py` receberam a proteção de perfis Windows registrados, independente da conta NetworkService. Valores de perfil vazios, relativos ou com variável não resolvida falham antes da exclusão.
 - SMB real não verificado. Operações de filesystem já iniciadas não podem ser interrompidas à força; o worker é único e daemon, com espera limitada no encerramento. Esse risco não impede continuar a implementação, mas não equivale a validar rede/instalação nativa.
 - Um reset Windows em resposta HTTP 405 foi observado em uma execução focada; não se reproduziu no teste dirigido ou nas suítes completas. A causalidade permanece inconclusiva, e o parser HTTP não foi alterado nesta tarefa.
+
+## API-07: configuração nativa e permissões
+
+Concluída em 27/10/2026. O assistente existente recebeu autenticação, limites e limpeza; campos de presets permanecem reservados no JSON, preservados e sem interface nesta etapa.
+
+- INI plano e validado, compatível com pedidos antigos/parciais; retenção legada de 17 dias preservada em teste.
+- Políticas são verificadas antes de alterar configuração, diretórios, permissões e serviço, incluindo proteção dos binários instalados e do helper em execução.
+- Teste de ACL real somente em pasta temporária comprovou herança e remoção de DELETE nos arquivos existentes, preservando as permissões do usuário. A mudança de pasta e o rollback revogam o grant correspondente.
+- A falha de revogação não impede restaurar a configuração anterior; falha ao restaurar JSON ou configuração do serviço impede o reinício e produz diagnóstico sanitizado. Não iniciar com uma configuração nova que deveria ter sido revertida.
+- Config e Setup compilados pelo Inno. O runner de instalação/reparo/desinstalação foi atualizado, mas não executado nesta máquina. Instalação nativa completa e SMB continuam para ambiente descartável apropriado.
