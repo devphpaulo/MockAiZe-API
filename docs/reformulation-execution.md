@@ -148,3 +148,10 @@ Removido try/except que apenas relançava ApiError em pending. O conjunto de IDs
 API: 267 testes, 266 PASS e 1 skip legado de symlink, com ResourceWarning tratado como erro. Desktop: 55 PASS. Testes Node de recuperação/retornos/datas/alerts PASS; sintaxe JavaScript PASS. Diff --check passou excluindo o arquivo Bruno preexistente, cujo hash Git continua fa05a33f58b8f9a270f185d9f6c82fb64c8ebbee.
 
 O smoke visual DOM continua bloqueado pela política do navegador. Sem build/release ou instalação nativa do serviço nesta revisão. Branch staging2 preservada, sem commit/push e sem alteração do Bruno preexistente.
+
+
+## Correção CI — fixtures canônicas no checkout Windows
+
+A execução Actions 40792479161 falhou em dois subcasos de test_shared_fixtures_match_payload_hash_and_exact_encoding: XML gerado em LF diferia da fixture convertida pelo checkout para CRLF. O job Python 3.11 foi cancelado pelo fail-fast da matriz após a falha do 3.14; não foi demonstrado defeito específico de versão do Python.
+
+A correção fixa text eol=lf somente em tests/fixtures/preset-v1/*, preservando as regras existentes dos assets Swagger. A comparação byte a byte permanece obrigatória. O Desktop recebe a mesma regra para sua cópia das fixtures. Validação inclui exportação Git com core.autocrlf=true e comparação dos seis arquivos exportados com os bytes originais, além da suíte de codec. O push corretivo dispara nova execução completa da matriz e do instalador.

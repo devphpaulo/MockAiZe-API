@@ -3,3 +3,6 @@ src/mockaize_api/assets/swagger/swagger-ui-bundle.js -text
 src/mockaize_api/assets/swagger/swagger-ui.css -text
 src/mockaize_api/assets/swagger/swagger-ui-bundle.js.LICENSE.txt -text -whitespace
 src/mockaize_api/assets/swagger/LICENSE -text
+
+# Canonical C-PRESET-1 fixtures must retain their exact bytes on Windows.
+tests/fixtures/preset-v1/* text eol=lf
