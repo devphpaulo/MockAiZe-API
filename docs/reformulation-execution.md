@@ -19,11 +19,11 @@ Referência: pacote `tasks/refinamento/planos-api-site-reformulations`, lido int
 | API-02 | API-01 | Oliver | Concluída | 176 testes OK, 1 ignorado; Dan sem bloqueantes; Luda APROVADO |
 | API-03 | API-01/02 | Ye | Concluída | 190 testes, 189 aprovados e 1 ignorado; ResourceWarning como erro; Dan sem bloqueantes; Luda APROVADO |
 | API-04 | API-01..03 | Oliver | Concluída | 201 testes, 200 aprovados e 1 ignorado; Dan sem bloqueantes; Luda APROVADO |
-| API-05 | API-01..04; Site para integração real | Ye | Adiada por orientação do usuário | Ver `Continuar após implementação do site.md` |
+| API-05 | API-01..04; SITE-01..04 | Ye | Concluída nesta retomada | Codec/fixtures compartilhados, XML-first/fallback, journals e integração Site/API em pasta descartável; detalhes abaixo |
 | API-06 | API-01..04; XML/OLD adiado pelo usuário | Ye | Concluída no recorte independente | 223 testes, 222 aprovados e 1 ignorado; Dan sem bloqueantes; Luda APROVADO COM RISCO |
 | API-07 | Tarefas API anteriores, exceto XML/OLD adiado | Oliver | Concluída no recorte independente | 238 testes, 237 aprovados e 1 ignorado; Config/Setup compilados; Dan sem bloqueantes; Luda APROVADO COM RISCO |
 | API-08 | Tarefas API implementadas; integração Site adiada pelo usuário | Oliver | Concluída no recorte disponível | 243 testes, 242 aprovados e 1 ignorado; build/pacotes/smoke reais aprovados; Dan sem bloqueantes; Luda APROVADO COM RISCO |
-| API-FV | API-08; SITE-06 para integração conjunta | Dan/Luda; smoke funcional | Recorte API verificado; integração conjunta adiada | Executável real e pacotes aprovados; limites descritos abaixo |
+| API-FV | API-08; SITE-06 para integração conjunta | Dan/Luda; smoke funcional | Cenário integrado local aprovado; gate visual do Site permanece parcial | Smoke sintético Site→API passou; runner DOM no browser não executado por bloqueio da política local |
 
 As edições são sequenciais; o coordenador revisa diff e validação antes da próxima tarefa.
 Integração real com o produtor Site e smoke nativo compilado precisam de evidência própria para serem declarados concluídos.
@@ -90,3 +90,61 @@ Logs locais: `build/api08-validation.txt`, `build/api08-build.txt`, `build/api08
 Limites remanescentes: somente Python 3.14 disponível localmente; Python 3.11 segue no workflow existente. Não executados nesta máquina: ciclo completo de instalação nativa/SCM, SMB real, interface Bruno, validador OpenAPI externo e integração com o Site. O build foi local; não houve publicação de release.
 
 Parecer final independente: Dan SEM ACHADOS BLOQUEANTES; Luda APROVADO COM RISCO para API-08 e API-FV no recorte implementado. O parecer conferiu testes, build, pacotes e smoke; não executou testes adicionais. A integração conjunta continua registrada em `Continuar após implementação do site.md`.
+
+## Retomada API-05 / API-FV — 28/10/2026
+
+O usuário retomou a execução depois de SITE-01..05, pediu a branch da API `staging2` baseada na `staging` existente e dispensou Arrowverse/Arrowhead. A comparação registrada antes da edição confirmou `staging`, `origin/staging` e `staging2` no mesmo commit-base `68bed40f1bbf040cb375d71a65cd953fb4654d8d`. O arquivo Bruno de primeiro registro preexistente permaneceu preservado. Nenhum dado real, serviço instalado, release ou credencial foi usado.
+
+### API-05 — implementação e decisões
+
+- `preset_codec.py` e `preset_repository.py` foram implementados no próprio consumidor Python. Não existe dependência de runtime do repositório do Desktop. O codec valida envelope/versão, hash, ID/arquivo, fuso IANA, posições de fórmula, schema das propriedades dos 20 geradores e caminhos XML estruturais conforme o produtor. A comparação com `storage.validate_formula` do Site identificou e fechou uma lacuna inicial de validação de propriedades/caminhos; os testes cobrem propriedade desconhecida e caminho de cópia inválido.
+- Os seis arquivos do corpus (`minimal` e `complete`: JSON, XML e SHA) foram comparados diretamente com `code/app/tests/fixtures/preset-v1`; todos são idênticos byte a byte. Os testes API também recalculam os hashes canônicos e conferem decode/encode exatos.
+- O repositório lê current novamente por chamada, ignora OLD e snapshots temporários, bloqueia `.sync/<UUID>.pending.json`, rejeita ID/arquivo divergente e nunca repara nem escreve nos dados do Site. XML inválido é `503 PRESET_INVALID`; ausência/inacessibilidade usa DB somente leitura; tombstone não permite ressuscitar o mesmo ID por fallback. A listagem mantém ordenação e cursor existentes e mescla IDs com precedência por current.
+- A revisão do journal real do Site revelou que um save pode listar current e OLD para o mesmo ID. O validador API inicialmente tratava essa dupla como duplicidade; foi corrigido para detectar duplicação do nome final completo, igual ao produtor, e coberto por fixture de journal current+OLD.
+- Preflight/startup aceita a pasta XML íntegra mesmo com DB de catálogo ausente. Health, catálogo, metadados e geração XML-only foram exercitados pela API HTTP; o caso inválido mantém o health textual `unavailable` e devolve `PRESET_INVALID` na rota do catálogo. Atualizar current/revision fica visível na próxima chamada; `expectedRevision` rejeita a revisão anterior.
+- `generate_new` e `generate_return` transportam o fuso do `Context` e capturam `referenceDateTime` uma vez por geração. Teste com dois modelos fixa um relógio sintético e prova o mesmo horário local/fuso nos resultados, sem nova opção HTTP.
+- O diretório padrão de presets coincide com `<databasePath.parent>/Presets`; no Desktop atual isso coincide com `Documents/MockAíZé/Presets`. A permissão existente já cobre esse diretório-padrão junto do pai do DB. Um `presetsDirectory` local customizado agora recebe `RX` para `NetworkService` durante configuração, sem `M`; UNC continua dependente da ACL SMB do administrador, como as demais pastas de origem. Teste Windows direcionado valida a ACL emitida.
+
+### API-FV — cenário Site→API
+
+Foi executado um smoke integrado sem fixtures inventadas para o produtor: diretório `Documents` temporário, DB vazio criado pelo `storage.initialize` do Site, workspace/pasta/variação sintéticos e saves pelo `storage.save_variation`/`preset_store.run_operation` real. A API usou `Catalog` e `generate_new` reais sobre os arquivos publicados. Resultado: **PASS** nos casos seguintes:
+
+1. Três saves publicados produziram a revisão atual e mantiveram em `OLD` a configuração imediatamente anterior.
+2. A API leu e gerou o valor do terceiro save; após o quarto save, o snapshot já carregado ainda gerou a configuração anterior, e a chamada seguinte viu a nova revisão.
+3. Save só de metadados/rename avançou a revisão sem alterar os bytes do OLD.
+4. O current ausente caiu para a revisão do SQLite; o mesmo XML atual funcionou usando um caminho de DB inexistente.
+5. Current inválido falhou com `PRESET_INVALID`; journal publicado após falha sintética bloqueou snapshot com `PRESET_SYNC_PENDING`; `recover()` do produtor convergiu e removeu a pendência.
+6. Exclusão da árvore publicou tombstone; a listagem API omitiu a variação e a consulta por ID retornou `FILE_NOT_FOUND`, sem ressuscitar a linha ainda existente no DB.
+
+O smoke foi executado com diretórios descartáveis; o primeiro script de verificação parou numa asserção escrita incorretamente sobre um valor que já era string. A asserção foi corrigida e a execução completa passou. Não permaneceu arquivo sintético no checkout.
+
+### Validação e limites
+
+- Suíte API final: `python -W error::ResourceWarning -m unittest discover -s tests -q` — **262 testes, 261 aprovados e 1 ignorado**, todos sem ResourceWarning. O caso ignorado preexistente depende de privilégio de symlink no teste de desinstalação. A suíte de `test_windows_ops.py` também foi executada isoladamente após a mudança de ACL: 28 testes PASS.
+- O OpenAPI embarcado, README API e README Bruno foram atualizados para remover a alegação DB-only/“XML aguarda o Site”; o teste de documentação da suíte confirmou a superfície OpenAPI local.
+- Não houve build/release nativo novo nesta retomada. A ACL foi verificada por chamada simulada do configurador e por teste de ACL já existente, não por instalação nova do serviço com diretório customizado. A integração smoke usou `Catalog` e motor reais, enquanto o fluxo HTTP XML-only foi coberto separadamente em teste HTTP; não se instalou nem reiniciou o serviço Windows.
+- SITE-06/FV ainda não recebe gate visual completo: `parity_smoke.html` com `DOMParser`/`XMLSerializer` não foi aberto em browser, conforme o bloqueio local já documentado; `node --check` sozinho não substitui esse smoke. A continuação agora comprova consumidor e produtor em cenário sintético real, mas não reescreve nem executa o runner de browser.
+- Não foi usado Arrowverse/Arrowhead nem validador OpenAPI externo. Não houve commit ou push nesta etapa.
+
+
+## Revisão corretiva Desktop/API — 28/10/2026
+
+Revisão direta dos diffs e módulos novos sem Arrowverse/Arrowhead ou agentes adicionais. Mantida a premissa de desktop local para equipe pequena. Correções do produtor, frontend e handlers HTTP estão detalhadas em code/docs/reformulation-execution.md no Desktop.
+
+### Bugs corrigidos
+
+1. Concorrência no fallback: um escritor podia publicar journal/commitar DB depois da checagem inicial. snapshot agora verifica novamente current e pendência após ler SQLite. Um current ou tombstone publicado durante a leitura resulta em PRESET_SYNC_PENDING para nova tentativa, impedindo retorno de linha do banco por cima de exclusão. Duas regressões simulam journal ainda pendente e tombstone já concluído durante a leitura.
+2. Concorrência na listagem: a dupla coleta inicial de XML não cobria a consulta posterior do DB. verify_scan confirma fingerprint e disponibilidade após ler o fallback, incluindo journals pendentes. Uma publicação nesse intervalo gera PRESET_SYNC_PENDING; teste determinístico publica exclusão durante a composição.
+3. Fuso fixo: o fallback forçava America/Fortaleza mesmo com outra preferência salva. Agora lê user_settings.timeZone na mesma transação do snapshot e valida com ZoneInfo. O padrão é preservado se preferência/tabela estiver ausente; preferência inválida gera indisponibilidade explícita. Regressão usa Asia/Tokyo.
+4. libraryPath variava por origem: SQLite incluía o nome da variação e espaços entre barras, enquanto o produtor fornece apenas ancestrais e name separado. O fallback agora retorna Workspace/Examples conforme C-PRESET-1. A expectativa antiga do teste foi atualizada; muda o texto de apresentação para manter equivalência, sem mudar IDs.
+5. Temporário Windows: o reconhecimento de .pending.json.tmp agora ignora caixa, alinhado ao produtor. A suíte Desktop revelou UUID/sufixo em maiúsculas num temporário não publicado. Regressão API confirma que esse arquivo incompleto não bloqueia e permanece intacto, pois o consumidor não escreve. Journals publicados continuam integralmente validados.
+
+### Melhorias pontuais e decisões
+
+Removido try/except que apenas relançava ApiError em pending. O conjunto de IDs do fallback é calculado uma vez por listagem, em vez de reconstruído para cada arquivo inacessível. As verificações de estabilidade pertencem a PresetRepository, sem acesso a seus métodos privados no Catalog. Codecs separados foram mantidos para preservar versões/empacotamento independentes, com fixtures compartilhadas como prova de compatibilidade. Sem cache persistente, novo framework ou pacote compartilhado.
+
+### Validação final e limites
+
+API: 267 testes, 266 PASS e 1 skip legado de symlink, com ResourceWarning tratado como erro. Desktop: 55 PASS. Testes Node de recuperação/retornos/datas/alerts PASS; sintaxe JavaScript PASS. Diff --check passou excluindo o arquivo Bruno preexistente, cujo hash Git continua fa05a33f58b8f9a270f185d9f6c82fb64c8ebbee.
+
+O smoke visual DOM continua bloqueado pela política do navegador. Sem build/release ou instalação nativa do serviço nesta revisão. Branch staging2 preservada, sem commit/push e sem alteração do Bruno preexistente.

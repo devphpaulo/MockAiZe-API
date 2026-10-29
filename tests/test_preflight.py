@@ -40,6 +40,17 @@ class PreflightTests(unittest.TestCase):
             check_environment(replace(self.config, database_path=missing))
         self.assertFalse(missing.exists())
 
+    def test_xml_directory_is_a_valid_preflight_source_without_database(self):
+        self.database.unlink()
+        self.config.presets_directory.mkdir()
+        check_environment(self.config)
+        self.assertFalse(self.database.exists())
+
+    def test_existing_xml_source_allows_preflight_when_database_schema_is_unavailable(self):
+        (self.config.presets_directory).mkdir()
+        self.database.write_text('not sqlite', encoding='utf-8')
+        check_environment(self.config)
+
     def test_non_sqlite_file_is_rejected(self):
         self.database.write_text('not a database')
         with self.assertRaises(PreflightError):

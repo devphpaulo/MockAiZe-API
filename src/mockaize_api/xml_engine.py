@@ -348,7 +348,10 @@ def generate_new(variation,record_count,file_index=0,policy=None):
     if type(record_count) is not int or record_count<1 or (policy.record_count is not None and record_count>policy.record_count):
         raise ApiError(422,'VALIDATION_ERROR','recordCount deve ser um inteiro positivo dentro do limite configurado.')
     try:
-        config=copy.deepcopy(variation['config']);config['name']=variation.get('name','mock');source,group=_input(config,'new')
+        config=copy.deepcopy(variation['config']);config['name']=variation.get('name','mock')
+        config['timeZone']=variation.get('context',{}).get('timeZone','America/Fortaleza')
+        config['referenceDateTime']=datetime.now(timezone.utc).isoformat()
+        source,group=_input(config,'new')
         if not source or not group:raise ApiError(422,'NEW_TEMPLATE_NOT_READY','Modelo de Novo não está pronto.')
         result,_,_=_generate(config,'new',record_count,source,group,source,group,config.get('rulesByMode',{}).get('new',{}),config.get('presenceByMode',{}).get('new',{}),config.get('headersByMode',{}).get('new',[]),config.get('filenameByMode',{}).get('new') or {'type':'literal','value':config.get('fileName','mock')},file_index)
         return [result]
@@ -381,7 +384,10 @@ def generate_return(variation,selection,composition='apart',input_xml=None,file_
     try:
         if composition not in ('apart','mixed'):raise ValueError('Composição inválida.')
         if input_records not in ('all','first'):raise ValueError('Seleção de registros de entrada inválida.')
-        config=copy.deepcopy(variation['config']);config['name']=variation.get('name','mock');template,group=_input(config,'return')
+        config=copy.deepcopy(variation['config']);config['name']=variation.get('name','mock')
+        config['timeZone']=variation.get('context',{}).get('timeZone','America/Fortaleza')
+        config['referenceDateTime']=datetime.now(timezone.utc).isoformat()
+        template,group=_input(config,'return')
         if not template or not group:raise ApiError(422,'RETURN_INPUT_TEMPLATE_NOT_READY','Modelo de entrada de Retorno não está pronto.')
         source=input_xml;doc=validate_return_input(template,group,source,policy)
         if input_records=='first':

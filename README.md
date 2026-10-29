@@ -11,7 +11,7 @@
 
 **MockAíZé API** é um serviço independente para consultar as configurações XML criadas no [MockAíZé](https://github.com/devphpaulo/MockAiZe) e gerar arquivos por requisições HTTP, **sem precisar manter o estúdio aberto**.
 
-O MockAíZé continua responsável pela configuração visual dos arquivos, mapeamentos e fórmulas. A API reutiliza essas regras por meio de uma leitura **somente leitura** do SQLite do estúdio e mantém seus próprios controles de geração, contadores e idempotência em uma base separada.
+O MockAíZé continua responsável pela configuração visual dos arquivos, mapeamentos e fórmulas. A API prefere os presets XML locais do estúdio e usa o SQLite em **somente leitura** como fallback para variações sem preset acessível. Os controles de geração, contadores e idempotência ficam em uma base operacional separada.
 
 > **Escopo atual:** catálogo e geração de **XML**. A API não substitui a interface do MockAíZé, não altera as configurações originais e ainda não implementa os motores de CSV, JSON ou CNAB.
 
@@ -29,7 +29,7 @@ O MockAíZé continua responsável pela configuração visual dos arquivos, mape
 O fluxo começa no **MockAíZé**, onde os arquivos e suas regras são preparados. Depois, a **MockAíZé API** usa essas configurações para atender às solicitações de geração.
 
 1. **Configure no MockAíZé:** crie ou importe um XML, defina seus campos, fórmulas e, quando necessário, os modelos de retorno. Salve a variação.
-2. **Instale e configure a API:** indique o banco SQLite do estúdio, as pastas de trabalho e a chave de acesso.
+2. **Instale e configure a API:** indique o banco SQLite do estúdio, a pasta local de presets e as pastas de trabalho. O banco pode ficar indisponível quando houver XML íntegro para atender à chamada.
 3. **Consulte o catálogo:** localize a variação e copie seu `fileId`.
 4. **Confira os modos:** verifique se a geração de novos registros ou os modelos de retorno estão prontos.
 5. **Gere e consuma:** envie uma requisição HTTP e receba o XML no formato de entrega escolhido.
@@ -39,7 +39,7 @@ O fluxo começa no **MockAíZé**, onde os arquivos e suas regras são preparado
 ## Requisitos
 
 - **Instalador:** Windows x64, com permissão para instalar e configurar um serviço do Windows.
-- **Uso da API:** um banco SQLite compatível, criado pelo [MockAíZé](https://github.com/devphpaulo/MockAiZe), com variações XML configuradas.
+- **Uso da API:** presets XML C-PRESET-1 em uma pasta local, ou um banco SQLite compatível criado pelo [MockAíZé](https://github.com/devphpaulo/MockAiZe) como fallback.
 - **Desenvolvimento:** Python 3.11 ou mais recente.
 - **Build local do instalador:** Inno Setup 6.7 ou mais recente.
 
@@ -50,7 +50,7 @@ A distribuição usa **Inno Setup** e um runtime Python empacotado. Não depende
 1. Acesse o [workflow de build](https://github.com/devphpaulo/MockAiZe-API/actions/workflows/build.yml).
 2. Abra uma execução concluída com sucesso e baixe o artefato **MockAiZe-API-Setup-Windows-x64**.
 3. Extraia o ZIP e execute `MockAiZe-API-Setup.exe`.
-4. No assistente, configure o caminho do SQLite do MockAíZé, os diretórios de entrada/saída/logs e o acesso ao serviço.
+4. No assistente, configure o caminho do SQLite do MockAíZé, os diretórios de entrada/saída/logs e o acesso ao serviço. Por padrão, a API procura `Presets` ao lado do banco, que é a pasta padrão do Desktop.
 5. Guarde a chave de API exibida na configuração; ela será necessária para as requisições autenticadas.
 
 O pacote também contém `MockAiZeApiUninstall.exe`. O instalador registra o serviço **MockAíZé API** e disponibiliza o configurador `MockAiZeApiConfig.exe`. Para iniciá-lo ou pará-lo, abra **Serviços do Windows** (`services.msc`).
@@ -175,7 +175,7 @@ Replay de entrega `directory` verifica existência, tamanho e hash da saída. Ar
 
 Por padrão, a API atende em `127.0.0.1:6578`, acessível somente na própria máquina. Para acesso pela rede, a configuração admite `0.0.0.0` com `firewallAccess: "Y"` e regras de firewall limitadas às origens escolhidas. **Não publique o serviço diretamente na internet:** ele não fornece TLS nativo.
 
-O SQLite do MockAíZé é aberto em **somente leitura**, sem alterar as variações. A API mantém estado operacional, contadores, idempotência e credenciais separados; a chave é exibida somente ao criar ou rotacionar, e o arquivo de credenciais armazena apenas seu hash.
+O preset atual é lido e validado em cada chamada. A API ignora arquivos `OLD` e temporários, respeita tombstones e bloqueia leituras cobertas por journals publicados. XML válido é suficiente para listar, consultar e gerar mesmo se o SQLite estiver ausente. Se o XML atual estiver ausente ou inacessível, a API usa o SQLite compatível em **somente leitura**; XML inválido retorna `503 PRESET_INVALID`, sem esconder o problema com fallback. Nenhuma escrita é feita nos presets ou no banco do estúdio. Por padrão, `presetsDirectory` é `<databasePath.parent>/Presets`, igual ao diretório padrão do Desktop. Para outro caminho local, configure `presetsDirectory` no JSON do serviço e reaplique/reinicie a configuração; o configurador concede leitura ao serviço, sem escrita. Em UNC, a leitura depende das permissões do compartilhamento e do NTFS. A API mantém estado operacional, contadores, idempotência e credenciais separados; a chave é exibida somente ao criar ou rotacionar, e o arquivo de credenciais armazena apenas seu hash.
 
 Os diretórios de banco, Entradas, Saídas e Logs podem apontar para caminhos locais ou **UNC** (`\\servidor\compartilhamento\MockAiZe`). No Windows, serviços não enxergam letras de unidades de rede mapeadas. Em compartilhamentos SMB, conceda permissões à conta do computador (`DOMÍNIO\NOME-DO-PC$`) no compartilhamento e no NTFS; NAS que exigem credenciais próprias não são compatíveis nesta versão.
 
@@ -214,7 +214,7 @@ Limpeza de Entradas exige opt-in e concede exclusão de arquivos ao serviço, se
 
 ### Pendência do Site: XML/OLD
 
-A fonte atual continua sendo o SQLite em somente leitura. O campo reservado `presetsDirectory` é preservado na configuração, mas não habilita um consumidor XML. Produção de current/OLD, journal, tombstones, sincronização e consumidor XML-first aguardam a implementação do Site e o protocolo compartilhado. Os passos de retomada estão em [Continuar após implementação do site](Continuar%20ap%C3%B3s%20implementa%C3%A7%C3%A3o%20do%20site.md). A documentação desta etapa não anuncia essa integração como disponível.
+O consumidor C-PRESET-1 está implementado. A pasta configurada em `presetsDirectory` é consultada novamente a cada requisição, sem cache persistente. O arquivo atual é `<id>.mockaize.xml`; `<id>.OLD.mockaize.xml` é apenas backup e nunca é escolhido automaticamente. A ausência do atual permite fallback ao SQLite; tombstone inativo impede que o mesmo ID reapareça pelo banco. Durante sincronização, o journal publicado bloqueia a listagem e as variações afetadas. XML inválido ou journal inválido resulta em indisponibilidade explícita. O produtor do Desktop e o contrato de sincronização usam o mesmo C-PRESET-1, sem dependência de código compartilhado em runtime.
 
 ## Desenvolvimento e testes
 

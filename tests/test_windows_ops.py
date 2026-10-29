@@ -132,6 +132,24 @@ class InstallerTests(unittest.TestCase):
         self.assertTrue(any('*S-1-5-21-123:(OI)(CI)M' in call.args for call in disabled))
         self.assertFalse(any(f'{SERVICE_SID}:(OI)(CI)M' in call.args for call in deletion))
 
+    def test_custom_local_preset_directory_gets_read_only_service_access(self):
+        from dataclasses import replace
+        from unittest.mock import MagicMock
+        presets = self.root / 'custom-presets'
+        config = replace(self.config, presets_directory=presets)
+        driver = WindowsDriver()
+        key = MagicMock()
+        key.__enter__.return_value = key
+        with patch('winreg.CreateKey', return_value=key), patch('winreg.SetValueEx'), \
+                patch.object(driver, 'run') as run, patch.object(driver, 'firewall'), \
+                patch.object(driver, 'register_shell'), patch.object(driver, 'configure_inputs'), \
+                patch('mockaize_api.windows_ops._is_network_path', return_value=False):
+            driver.configure(Installation(self.target, self.path), config)
+        self.assertTrue(any('icacls.exe' in call.args and str(presets) in call.args and
+                            f'{SERVICE_SID}:(OI)(CI)RX' in call.args for call in run.call_args_list))
+        self.assertFalse(any('icacls.exe' in call.args and str(presets) in call.args and
+                             f'{SERVICE_SID}:(OI)(CI)M' in call.args for call in run.call_args_list))
+
     def test_remote_input_permissions_are_not_changed_locally(self):
         driver = WindowsDriver()
         with patch('mockaize_api.windows_ops._is_network_path', return_value=True), \

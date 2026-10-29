@@ -361,7 +361,7 @@ class WindowsDriver:
             self.run('icacls.exe', str(installation.directory), '/grant', f'{SERVICE_SID}:(OI)(CI)RX')
         # Only local configured trees receive local SID grants. Remote SMB
         # permissions are controlled by the share and the machine account.
-        for directory in (config.database_path.parent,):
+        for directory in dict.fromkeys((config.database_path.parent, config.presets_directory)):
             if not _is_network_path(directory):
                 self.run('icacls.exe', str(directory), '/grant', f'{SERVICE_SID}:(OI)(CI)RX')
         self.configure_inputs(config, root)

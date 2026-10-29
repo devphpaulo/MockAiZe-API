@@ -1,6 +1,8 @@
 import json
+from datetime import datetime, timezone
 import unittest
 from xml.dom import minidom
+from unittest.mock import patch
 from mockaize_api.errors import ApiError
 from mockaize_api.xml_engine import generate_new, generate_return, validate_return_input
 from mockaize_api.policy import ResolvedPolicy
@@ -69,6 +71,28 @@ class EngineTests(unittest.TestCase):
         result = generate_return(v, {'type': 'all'}, 'mixed', source,
                                  policy=ResolvedPolicy(record_count=2))[0]
         self.assertEqual(result['records'], 4)
+
+    def test_return_captures_one_reference_time_and_uses_preset_timezone_for_all_models(self):
+        import copy
+        from mockaize_api import xml_engine
+        v = variation()
+        v['context'] = {'timeZone': 'America/Fortaleza'}
+        formula = {'type': 'date', 'mode': 'specific', 'value': '2026-01-01', 'format': 'custom',
+                   'custom': {'order': 'YMD', 'yearDigits': '4', 'dateSeparator': '-',
+                              'timeSeparator': ':', 'join': ' ', 'day': True, 'month': True,
+                              'year': True, 'hour': True, 'minute': True, 'second': True,
+                              'milliseconds': False, 'timezone': True, 'zone': 'app'}}
+        v['config']['returnModels'][0]['rules'] = {path('out', 'r', 'a'): {'generator': formula}}
+        second = copy.deepcopy(v['config']['returnModels'][0])
+        second.update(id='B', name='Second')
+        v['config']['returnModels'].append(second)
+        with patch.object(xml_engine, 'datetime') as clock:
+            clock.now.return_value = datetime(2026, 2, 1, 1, 2, 3, tzinfo=timezone.utc)
+            results = generate_return(v, {'type': 'all'}, input_xml='<root><r><a>1</a></r></root>')
+        self.assertEqual(clock.now.call_count, 1)
+        self.assertEqual(len(results), 2)
+        for result in results:
+            self.assertIn(b'<a>2026-01-01 22:02:03-03:00</a>', result['content'])
 
     def test_saved_templates_do_not_inherit_request_input_byte_limit(self):
         v = variation()

@@ -9,8 +9,10 @@ from pathlib import Path
 import re
 import sqlite3
 import xml.etree.ElementTree as ET
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .errors import ApiError
+from .preset_repository import PresetRepository
 
 
 _REQUIRED_COLUMNS = {
@@ -89,8 +91,9 @@ def _return_items(config):
 
 
 class Catalog:
-    def __init__(self, database_path: Path):
+    def __init__(self, database_path: Path, presets_directory: Path | None = None):
         self.database_path = Path(database_path)
+        self.presets = PresetRepository(presets_directory or self.database_path.parent / 'Presets')
 
     @contextmanager
     def _read(self):
@@ -121,8 +124,43 @@ class Catalog:
                 raise _unavailable()
 
     def check(self):
-        with self._read():
-            pass
+        scan = self.presets.scan()
+        database_available = self._database_available()
+        if scan['available']:
+            if scan['inaccessible'] and not database_available:
+                raise _unavailable()
+            return
+        if not database_available:
+            raise _unavailable()
+
+    def preflight(self):
+        """Require one configured source without rejecting a bad current preset at startup."""
+        if self.presets.available():
+            return
+        if not self._database_reachable():
+            raise _unavailable()
+
+    def _database_reachable(self):
+        connection = None
+        try:
+            uri = self.database_path.resolve().as_uri() + '?mode=ro'
+            connection = sqlite3.connect(uri, uri=True, timeout=2)
+            connection.execute('PRAGMA query_only=ON')
+            connection.execute('SELECT name FROM sqlite_master LIMIT 1').fetchall()
+            return True
+        except (sqlite3.Error, OSError, ValueError):
+            return False
+        finally:
+            if connection is not None:
+                connection.close()
+
+    def _database_available(self):
+        try:
+            with self._read():
+                pass
+            return True
+        except ApiError:
+            return False
 
     @staticmethod
     def _visible_nodes(connection):
@@ -137,12 +175,14 @@ class Catalog:
                 path.append(current['name'])
                 parent_id = current['parent_id']
                 if parent_id is None:
-                    visible[identity] = (node, ' / '.join(reversed(path)))
+                    # C-PRESET-1 carries ancestors here; the variation name
+                    # is a separate field in both sources.
+                    visible[identity] = (node, '/'.join(reversed(path[1:])))
                     break
                 current = nodes.get(parent_id)
         return visible
 
-    def snapshot(self, file_id: str):
+    def _database_snapshot(self, file_id: str):
         if not isinstance(file_id, str) or not file_id or len(file_id) > 128:
             raise ApiError(400, 'INVALID_REQUEST', 'Identificador de arquivo inválido.')
         with self._read() as connection:
@@ -159,9 +199,45 @@ class Catalog:
             if not isinstance(config, dict):
                 raise _unavailable()
             _models(config)
+            time_zone = 'America/Fortaleza'
+            if connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='user_settings'").fetchone():
+                setting = connection.execute("SELECT value_json FROM user_settings WHERE key='timeZone'").fetchone()
+                if setting is not None:
+                    time_zone = json.loads(setting[0])
+                    try:
+                        ZoneInfo(time_zone)
+                    except (ZoneInfoNotFoundError, ValueError, TypeError) as exc:
+                        raise _unavailable() from exc
             return {'id': row['id'], 'name': node_path[0]['name'],
                     'revision': row['revision'], 'file_index': row['file_index'],
-                    'config': config, 'libraryPath': node_path[1]}
+                    'config': config, 'libraryPath': node_path[1],
+                    'context': {'timeZone': time_zone}, 'source': 'database'}
+
+    def snapshot(self, file_id: str):
+        if not isinstance(file_id, str) or not file_id or len(file_id) > 128:
+            raise ApiError(400, 'INVALID_REQUEST', 'Identificador de arquivo inválido.')
+        available, payload, inaccessible = self.presets.current(file_id)
+        if payload is not None:
+            metadata = payload['metadata']
+            if not metadata['active']:
+                raise ApiError(404, 'FILE_NOT_FOUND', 'Arquivo não encontrado.')
+            config = payload['configuration']
+            _models(config)
+            return {'id': metadata['id'], 'name': metadata['name'], 'libraryPath': metadata['libraryPath'],
+                    'revision': metadata['revision'], 'file_index': metadata['fileIndex'],
+                    'config': config, 'context': payload['context'], 'source': 'preset'}
+        try:
+            snapshot = self._database_snapshot(file_id)
+        except ApiError as error:
+            if error.code == 'FILE_NOT_FOUND':
+                raise
+            if available and not inaccessible:
+                raise ApiError(404, 'FILE_NOT_FOUND', 'Arquivo não encontrado.') from None
+            raise _unavailable() from error
+        # A writer may publish its journal after current() checked it and
+        # commit the DB before this fallback transaction starts.
+        self.presets.verify_fallback(file_id)
+        return snapshot
 
     def file(self, file_id: str):
         snapshot = self.snapshot(file_id)
@@ -172,17 +248,44 @@ class Catalog:
             raise _invalid_cursor()
         query = q.casefold()
         after = self._decode_cursor(cursor, query) if cursor is not None else None
-        with self._read() as connection:
-            visible = self._visible_nodes(connection)
-            items = []
-            for row in connection.execute('SELECT id,revision FROM variations'):
-                node_path = visible.get(row['id'])
-                if node_path is None or node_path[0]['kind'] != 'variation':
-                    continue
-                name = node_path[0]['name']
-                key = (name.casefold(), row['id'])
-                if query in name.casefold() and (after is None or key > after):
-                    items.append({'id': row['id'], 'name': name, 'libraryPath': node_path[1], 'revision': row['revision']})
+        scan = self.presets.scan()
+        database_items, database_available = [], False
+        try:
+            with self._read() as connection:
+                visible = self._visible_nodes(connection)
+                for row in connection.execute('SELECT id,revision FROM variations'):
+                    node_path = visible.get(row['id'])
+                    if node_path is None or node_path[0]['kind'] != 'variation':
+                        continue
+                    database_items.append({'id': row['id'], 'name': node_path[0]['name'],
+                                           'libraryPath': node_path[1], 'revision': row['revision']})
+            database_available = True
+        except ApiError:
+            if not scan['available']:
+                raise
+        if scan['inaccessible'] and not database_available:
+            raise _unavailable()
+        if not scan['available'] and not database_available:
+            raise _unavailable()
+        self.presets.verify_scan(scan)
+        tombstones = {identifier for identifier, payload in scan['items'].items()
+                      if not payload['metadata']['active']}
+        items_by_id = {item['id']: item for item in database_items if item['id'] not in tombstones}
+        for identifier, payload in scan['items'].items():
+            metadata = payload['metadata']
+            if metadata['active']:
+                items_by_id[identifier] = {'id': identifier, 'name': metadata['name'],
+                                           'libraryPath': metadata['libraryPath'], 'revision': metadata['revision']}
+        database_ids = {item['id'] for item in database_items}
+        for identifier in scan['inaccessible']:
+            # An unreadable current is allowed to fall back only to the matching DB record.
+            if identifier not in database_ids:
+                raise _unavailable()
+        items = []
+        for item in items_by_id.values():
+            key = (item['name'].casefold(), item['id'])
+            if query in item['name'].casefold() and (after is None or key > after):
+                items.append(item)
         items.sort(key=lambda item: (item['name'].casefold(), item['id']))
         page = items[:limit]
         next_cursor = None

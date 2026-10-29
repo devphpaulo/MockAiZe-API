@@ -20,6 +20,6 @@ A documentação completa e executável está em `http://127.0.0.1:6578/`, tamb�
 
 Use `Idempotency-Key` para repetir a mesma operação/chave/corpo sem nova geração. A chave tem escopo por operação (`new`/`return`); dentro da mesma operação, outro corpo ou fileId retorna 409. Replay directory de arquivo removido ou substituído retorna 410 `OUTPUT_EXPIRED`, sem regenerar/avançar contador; acesso indisponível retorna 503. Content/inline persistidos não dependem de arquivos em Saídas.
 
-Erros novos são JSON com `error.code`, `error.message` e `error.traceId`, status numérico somente no HTTP e extensões públicas na raiz. O traceId corresponde ao header `X-Request-ID`; replay de erro conserva o identificador e corpo originais. A fonte de configurações continua sendo o SQLite em somente leitura; XML/OLD aguardam o Site.
+Erros novos são JSON com `error.code`, `error.message` e `error.traceId`, status numérico somente no HTTP e extensões públicas na raiz. O traceId corresponde ao header `X-Request-ID`; replay de erro conserva o identificador e corpo originais. A API lê o preset atual C-PRESET-1 por requisição e usa o SQLite em somente leitura quando o XML está ausente ou inacessível. XML inválido retorna `503 PRESET_INVALID`, sem fallback; OLD é ignorado e tombstone impede reexpor o ID.
 
 O ambiente versionado contém apenas valores de exemplo e `apiKey` vazia. Preencha sua chave localmente e não a inclua em commits. Nunca persista `accessToken` no ambiente.

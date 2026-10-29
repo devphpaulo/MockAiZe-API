@@ -12,6 +12,8 @@ from unittest.mock import patch
 from fixtures.catalog_factory import create_catalog
 from mockaize_api.config import ApiConfig, save_config
 from mockaize_api.errors import ApiError
+from mockaize_api.catalog import Catalog
+from mockaize_api.preset_codec import encode_preset
 from mockaize_api.runtime import ApiServer, Application, _problem
 from mockaize_api.security import create_credentials
 
@@ -427,6 +429,63 @@ class HttpTests(unittest.TestCase):
         status, _, body = self.call('POST', '/api/v1/files/xml/file-1/new', {'recordCount': 1, 'expectedRevision': 999})
         self.assertEqual(status, 409)
         self.assertEqual(json.loads(body)['error']['code'], 'REVISION_MISMATCH')
+
+    def test_xml_only_catalog_serves_health_list_metadata_and_generation_without_studio_database(self):
+        import sqlite3
+        database = self.root / 'source.sqlite3'
+        connection = sqlite3.connect(database)
+        try:
+            config = json.loads(connection.execute('SELECT config_json FROM variations WHERE id=?',
+                                                   ('file-1',)).fetchone()[0])
+            revision, file_index = connection.execute(
+                'SELECT revision,file_index FROM variations WHERE id=?', ('file-1',)).fetchone()
+        finally:
+            connection.close()
+        presets = self.root / 'Presets'
+        presets.mkdir()
+        metadata = {'id': 'file-1', 'name': 'preset from XML', 'libraryPath': 'Equipe/API',
+                    'revision': revision + 1, 'fileIndex': file_index, 'active': True}
+        (presets / 'file-1.mockaize.xml').write_bytes(encode_preset(
+            metadata, config, {'timeZone': 'America/Fortaleza'}))
+        database.unlink()
+        self.server.application.catalog = Catalog(database, presets)
+        restarted_application = Application(self.config_path)
+        self.assertEqual(restarted_application.health()['status'], 200)
+
+        status, _, body = self.call('GET', '/health', authenticated=False)
+        self.assertEqual((status, json.loads(body)['status']), (200, 'ok'))
+        status, _, body = self.call('GET', '/api/v1/files/xml')
+        self.assertEqual(status, 200, body)
+        self.assertEqual(json.loads(body)['items'][0]['name'], 'preset from XML')
+        status, _, body = self.call('GET', '/api/v1/files/xml/file-1')
+        self.assertEqual((status, json.loads(body)['revision']), (200, revision + 1))
+        status, _, body = self.call('POST', '/api/v1/files/xml/file-1/new',
+                                    {'recordCount': 1, 'delivery': 'content',
+                                     'expectedRevision': revision + 1})
+        self.assertEqual(status, 200, body)
+        self.assertEqual(json.loads(body)['delivery'], 'content')
+        self.assertTrue((presets / 'file-1.mockaize.xml').exists())
+
+        metadata['revision'] += 1
+        (presets / 'file-1.mockaize.xml').write_bytes(encode_preset(
+            metadata, config, {'timeZone': 'America/Fortaleza'}))
+        status, _, body = self.call('GET', '/api/v1/files/xml/file-1')
+        self.assertEqual((status, json.loads(body)['revision']), (200, revision + 2))
+        status, _, body = self.call('POST', '/api/v1/files/xml/file-1/new',
+                                    {'recordCount': 1, 'delivery': 'content',
+                                     'expectedRevision': revision + 1})
+        self.assertEqual((status, json.loads(body)['error']['code']), (409, 'REVISION_MISMATCH'))
+
+    def test_invalid_current_preset_is_not_hidden_by_database_fallback(self):
+        presets = self.root / 'Presets'
+        presets.mkdir()
+        (presets / 'file-1.mockaize.xml').write_text('<invalid/>', encoding='utf-8')
+        self.server.application.catalog = Catalog(self.root / 'source.sqlite3', presets)
+        status, _, body = self.call('GET', '/health', authenticated=False)
+        self.assertEqual((status, json.loads(body)['status']), (503, 'unavailable'))
+        status, _, body = self.call('GET', '/api/v1/files/xml/file-1')
+        self.assertEqual(status, 503, body)
+        self.assertEqual(json.loads(body)['error']['code'], 'PRESET_INVALID')
 
     def test_new_inline_hash_and_count_and_idempotency(self):
         from xml.dom import minidom
