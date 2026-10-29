@@ -1,7 +1,6 @@
 """Executable checks for the documented local contract; no external validator required."""
 import json
 from pathlib import Path
-import re
 import tempfile
 import unittest
 
@@ -90,16 +89,15 @@ class ContractDocumentationTests(unittest.TestCase):
             self.assertEqual(set(item['content']), {'application/json'})
         self.assertNotIn('Problem', self.spec['components']['schemas'])
 
-    def test_bruno_return_examples_require_input_and_login_keeps_token_in_memory(self):
-        for path in (ROOT / 'bruno').glob('*.bru'):
-            content = path.read_text(encoding='utf-8')
-            if not re.search(r'url:\s*[^\r\n]*/return\s*$', content, re.M):
-                continue
-            body = re.search(r'body:json\s*{\s*(\{.*?\})\s*}\s*(?:docs|script:)', content, re.S)
-            self.assertIsNotNone(body, path.name)
-            payload = json.loads(body.group(1))
-            validate_generation('return', {**payload, 'fileId': 'file-1'})
-        login = (ROOT / 'bruno/Auth - Login.bru').read_text(encoding='utf-8')
-        self.assertIn('bru.setVar("accessToken"', login)
-        self.assertNotIn('console.log', login)
+    def test_openapi_examples_require_input_and_readme_documents_swagger(self):
+        readme = (ROOT / 'README.md').read_text(encoding='utf-8')
+        self.assertIn('/swagger/', readme)
+        self.assertIn('/openapi.json', readme)
+        for operation in ('new', 'return'):
+            post = self.spec['paths']['/api/v1/files/xml/{fileId}/' + operation]['post']
+            examples = post['requestBody']['content']['application/json']['examples']
+            for name, example in examples.items():
+                with self.subTest(operation=operation, example=name):
+                    payload = example['value']
+                    validate_generation(operation, {**payload, 'fileId': 'file-1'})
 

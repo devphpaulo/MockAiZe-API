@@ -20,7 +20,7 @@ O MockAíZé continua responsável pela configuração visual dos arquivos, mape
 - **Reutilizar configurações:** prepare as regras uma vez no MockAíZé e execute novas gerações por HTTP.
 - **Automatizar testes:** solicite novos registros e arquivos de retorno a partir de clientes HTTP, scripts e fluxos de QA.
 - **Executar independentemente:** serviço Windows com inicialização automática, sem abrir o estúdio e sem instalar Python na máquina de destino.
-- **Integrar com facilidade:** Swagger UI e OpenAPI locais, além de uma coleção pronta para o Bruno.
+- **Integrar com facilidade:** Swagger UI e OpenAPI locais, sem depender de internet ou de ferramentas externas.
 - **Controlar as entregas:** grave os XMLs no servidor, receba o conteúdo em JSON ou obtenha um XML diretamente na resposta.
 - **Restringir o acesso:** API key ou Bearer temporário, autenticação configurável, limites operacionais, idempotência e logs sanitizados.
 
@@ -161,17 +161,18 @@ O status numérico existe somente no HTTP. `error` contém exatamente `code`, `m
 
 Esta reformulação muda intencionalmente dois contratos: retorno exige `inputXml` e os erros deixam o formato antigo. Atualize seus clientes. Na exceção de replay de erro já persistido, o corpo e o trace originais são preservados, inclusive se forem legados; o log correlaciona a tentativa atual sem alterar os bytes salvos.
 
-## Integrar com o Bruno
+## Swagger e OpenAPI locais
 
-A pasta [`bruno/`](bruno/) contém uma coleção com consultas ao catálogo, geração de novos registros e cenários de retorno.
+A API empacota o Swagger UI e o contrato OpenAPI para uso totalmente offline:
 
-Importe-a no Bruno, selecione o ambiente `local` e configure `apiKey`, `baseUrl` e `fileId`. Consulte o [guia da coleção](bruno/README.md) para exemplos de requisições e opções de entrega.
+- **Swagger UI:** [http://127.0.0.1:6578/](http://127.0.0.1:6578/) ou [http://127.0.0.1:6578/swagger/](http://127.0.0.1:6578/swagger/).
+- **Documento OpenAPI:** [http://127.0.0.1:6578/openapi.json](http://127.0.0.1:6578/openapi.json) ou [http://127.0.0.1:6578/swagger/v1/swagger.json](http://127.0.0.1:6578/swagger/v1/swagger.json).
 
-Para evitar repetir uma geração após falha de rede, use `Idempotency-Key`. Mesma operação, chave e corpo reaproveitam a resposta. A chave possui escopo por operação (`new` ou `return`): dentro da mesma operação, outro corpo ou `fileId` retorna 409. A mesma chave em outra operação possui registro separado.
+Abra o Swagger depois de iniciar o serviço para consultar as rotas, esquemas e exemplos. Em **Authorize**, informe a chave de `X-API-Key` ou o token Bearer emitido por `POST /api/v1/auth/token`; não preencha as duas opções ao mesmo tempo. A documentação e o health check são públicos, enquanto catálogo e geração exigem autenticação por padrão.
 
-Replay de entrega `directory` verifica existência, tamanho e hash da saída. Arquivo removido ou substituído retorna **410 `OUTPUT_EXPIRED`**, sem regenerar, avançar sequencial ou substituir o registro de replay. Falha temporária de acesso retorna 503. Respostas `content` e `inline` persistidas continuam disponíveis sem depender dos arquivos em Saídas.
+O Swagger é servido pelos arquivos locais em `src/mockaize_api/assets/swagger/` e não faz chamadas externas. Para clientes automatizados, prefira o documento OpenAPI e valide o contrato antes de enviar requisições.
 
-## Configuração, dados e segurança
+## Configuração, dados e segurança/
 
 Por padrão, a API atende em `127.0.0.1:6578`, acessível somente na própria máquina. Para acesso pela rede, a configuração admite `0.0.0.0` com `firewallAccess: "Y"` e regras de firewall limitadas às origens escolhidas. **Não publique o serviço diretamente na internet:** ele não fornece TLS nativo.
 
@@ -251,14 +252,13 @@ O build produz `release/MockAiZe-API-Setup.exe` e `release/MockAiZeApiUninstall.
 
 - `src/mockaize_api/` — servidor HTTP, catálogo, regras XML, segurança, configuração e serviço Windows.
 - `src/mockaize_api/assets/swagger/` — OpenAPI e Swagger UI empacotados para uso offline.
-- `bruno/` — coleção de requisições e ambiente local.
 - `packaging/` — scripts de build, empacotamento, instalador e verificações.
 - `tests/` — testes automatizados dos contratos e operações.
 - `.github/workflows/` — build e inspeção dos artefatos.
 
 ## Contribuição
 
-Contribuições são bem-vindas. Abra uma issue descrevendo a necessidade ou envie um pull request com escopo definido e testes. Mudanças no contrato HTTP devem considerar o OpenAPI, a coleção Bruno e a compatibilidade com as configurações do MockAíZé.
+Contribuições são bem-vindas. Abra uma issue descrevendo a necessidade ou envie um pull request com escopo definido e testes. Mudanças no contrato HTTP devem considerar o OpenAPI e a compatibilidade com as configurações do MockAíZé.
 
 ## Autor
 
