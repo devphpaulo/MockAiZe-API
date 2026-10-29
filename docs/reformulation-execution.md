@@ -155,3 +155,10 @@ O smoke visual DOM continua bloqueado pela política do navegador. Sem build/rel
 A execução Actions 40792479161 falhou em dois subcasos de test_shared_fixtures_match_payload_hash_and_exact_encoding: XML gerado em LF diferia da fixture convertida pelo checkout para CRLF. O job Python 3.11 foi cancelado pelo fail-fast da matriz após a falha do 3.14; não foi demonstrado defeito específico de versão do Python.
 
 A correção fixa text eol=lf somente em tests/fixtures/preset-v1/*, preservando as regras existentes dos assets Swagger. A comparação byte a byte permanece obrigatória. O Desktop recebe a mesma regra para sua cópia das fixtures. Validação inclui exportação Git com core.autocrlf=true e comparação dos seis arquivos exportados com os bytes originais, além da suíte de codec. O push corretivo dispara nova execução completa da matriz e do instalador.
+
+
+### Correção da instalação nativa após destravar a matriz
+
+Na execução 40793185513, testes/distribuições/wheel passaram em Python 3.11/3.14, assim como geração do instalador e smoke do executável. A instalação real expôs icacls código 2: a concessão RX tentava acessar Presets ainda inexistente no cenário SQLite-only. O mock anterior não conferia a existência do alvo.
+
+WindowsDriver.configure aplica RX somente às raízes locais de catálogo existentes, tanto presetsDirectory quanto databasePath.parent. Isso também atende XML-only com parent do banco ausente. Não cria diretório Studio, não amplia ACL de ancestral de caminho customizado e não altera permissões remotas. Presets padrão criado depois herda RX de databasePath.parent; uma pasta customizada criada posteriormente fora dessa árvore exige reaplicar configuração/reparar a API para receber o grant local. O teste de ACL cobre pasta customizada presente/ausente, ausência de criação e grant somente RX. O smoke nativo integral do Actions foi mantido.

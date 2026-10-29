@@ -135,20 +135,26 @@ class InstallerTests(unittest.TestCase):
     def test_custom_local_preset_directory_gets_read_only_service_access(self):
         from dataclasses import replace
         from unittest.mock import MagicMock
-        presets = self.root / 'custom-presets'
-        config = replace(self.config, presets_directory=presets)
-        driver = WindowsDriver()
-        key = MagicMock()
-        key.__enter__.return_value = key
-        with patch('winreg.CreateKey', return_value=key), patch('winreg.SetValueEx'), \
-                patch.object(driver, 'run') as run, patch.object(driver, 'firewall'), \
-                patch.object(driver, 'register_shell'), patch.object(driver, 'configure_inputs'), \
-                patch('mockaize_api.windows_ops._is_network_path', return_value=False):
-            driver.configure(Installation(self.target, self.path), config)
-        self.assertTrue(any('icacls.exe' in call.args and str(presets) in call.args and
-                            f'{SERVICE_SID}:(OI)(CI)RX' in call.args for call in run.call_args_list))
-        self.assertFalse(any('icacls.exe' in call.args and str(presets) in call.args and
-                             f'{SERVICE_SID}:(OI)(CI)M' in call.args for call in run.call_args_list))
+        for exists in (False, True):
+            with self.subTest(exists=exists):
+                presets = self.root / ('presets-present' if exists else 'presets-absent')
+                if exists:
+                    presets.mkdir()
+                config = replace(self.config, presets_directory=presets)
+                driver = WindowsDriver()
+                key = MagicMock()
+                key.__enter__.return_value = key
+                with patch('winreg.CreateKey', return_value=key), patch('winreg.SetValueEx'), \
+                        patch.object(driver, 'run') as run, patch.object(driver, 'firewall'), \
+                        patch.object(driver, 'register_shell'), patch.object(driver, 'configure_inputs'), \
+                        patch('mockaize_api.windows_ops._is_network_path', return_value=False):
+                    driver.configure(Installation(self.target, self.path), config)
+                grants = [call for call in run.call_args_list
+                          if 'icacls.exe' in call.args and str(presets) in call.args]
+                self.assertEqual(bool(grants), exists)
+                self.assertEqual(presets.exists(), exists)
+                self.assertTrue(all(f'{SERVICE_SID}:(OI)(CI)RX' in call.args for call in grants))
+                self.assertFalse(any(f'{SERVICE_SID}:(OI)(CI)M' in call.args for call in grants))
 
     def test_remote_input_permissions_are_not_changed_locally(self):
         driver = WindowsDriver()
