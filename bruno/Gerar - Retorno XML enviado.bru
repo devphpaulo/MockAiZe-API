@@ -29,5 +29,5 @@ body:json {
 }
 
 docs {
-  Substitua inputXml por um XML compatível com a estrutura de entrada configurada na sua variação. As regras de cópia e os cálculos de entrada usam os valores enviados. Gera para todos os registros e todos os modelos de retorno, devolvendo files[].content no JSON sem gravar em Saídas. Se inputXml e inputFilePath forem omitidos, usa o XML salvo no banco.
+  inputXml é obrigatório: substitua o exemplo por um XML compatível com a estrutura configurada. Cópias e cálculos usam os valores enviados. Gera para todos os registros e todos os modelos salvos, devolvendo files[].content sem gravar em Saídas. Um modelo não pronto faz a chamada falhar. Não aceita inputFilePath ou entrada salva como substituição. O limite de registros considera a fonte completa antes de inputRecords first.
 }

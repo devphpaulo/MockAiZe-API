@@ -5,5 +5,16 @@
   "logsDirectory": "C:\\Users\\Usuario\\Documents\\MockAíZé API\\Logs",
   "port": 6578,
   "host": "127.0.0.1",
-  "firewallAccess": "N"
+  "firewallAccess": "N",
+  "presetsDirectory": "C:\\Users\\Usuario\\Documents\\MockAíZé\\Presets",
+  "authentication": { "required": true },
+  "limits": {
+    "inputXml": { "mode": "default" },
+    "records": { "mode": "default" }
+  },
+  "cleanup": {
+    "inputs": { "mode": "disabled" },
+    "outputs": { "mode": "disabled" },
+    "logs": { "mode": "age", "days": 30 }
+  }
 }

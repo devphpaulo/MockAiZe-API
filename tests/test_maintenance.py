@@ -1,6 +1,7 @@
 import configparser
 import contextlib
 import io
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -9,7 +10,7 @@ from unittest.mock import Mock, patch
 
 from fixtures.catalog_factory import create_catalog
 from mockaize_api import maintenance
-from mockaize_api.config import ApiConfig, save_config
+from mockaize_api.config import ApiConfig, ConfigurationError, load_config, save_config
 from mockaize_api.windows_ops import Installation
 from mockaize_api.windows_ops import WindowsDriver
 
@@ -62,6 +63,59 @@ class MaintenanceTests(unittest.TestCase):
             result = maintenance.execute('inspect', {}, self.driver)
         self.assertEqual(result['state'], 'absent')
         self.assertNotIn('installDir', result)
+
+    def test_native_policy_fields_round_trip_and_preserve_reserved_preset_path(self):
+        values = self.config.to_mapping()
+        values['presetsDirectory'] = str(self.root / 'Presets reservados')
+        save_config(self.installation.config_path, ApiConfig.from_mapping(values))
+        request = self.request()
+        request.update(authenticationRequired='false', inputXmlMode='custom', inputXmlBytes='3000000',
+                       recordsMode='disabled', cleanupInputsMode='age', cleanupInputsDays='7',
+                       cleanupOutputsMode='disabled', cleanupLogsMode='age', cleanupLogsDays='17')
+        config = maintenance._configuration(request, self.installation)
+        save_config(self.installation.config_path, config)
+        result = maintenance.execute('inspect', {}, self.driver)
+        self.assertEqual(result['authenticationRequired'], 'false')
+        self.assertEqual((result['inputXmlMode'], result['inputXmlBytes']), ('custom', '3000000'))
+        self.assertEqual(result['recordsMode'], 'disabled')
+        self.assertEqual((result['cleanupInputsMode'], result['cleanupInputsDays']), ('age', '7'))
+        self.assertEqual(result['cleanupLogsDays'], '17')
+        self.assertEqual(load_config(self.installation.config_path).presets_directory,
+                         self.root / 'Presets reservados')
+        self.assertFalse(any(isinstance(value, dict) for value in result.values()))
+
+    def test_legacy_log_retention_is_effective_in_native_snapshot_and_save(self):
+        (self.data / 'policy.json').write_text(json.dumps({'logs_retention_days': 17}))
+        snapshot = maintenance.execute('inspect', {}, self.driver)
+        self.assertEqual((snapshot['cleanupLogsMode'], snapshot['cleanupLogsDays']), ('age', '17'))
+        config = maintenance._configuration(snapshot, self.installation)
+        self.assertEqual(config.cleanup.logs.days, 17)
+
+    def test_partial_legacy_native_request_keeps_expanded_policies(self):
+        values = self.config.to_mapping()
+        values.update(authentication={'required': False}, limits={'records': {'mode': 'disabled'}},
+                      cleanup={'logs': {'mode': 'disabled'}})
+        config = ApiConfig.from_mapping(values)
+        save_config(self.installation.config_path, config)
+        result = maintenance._configuration({'port': '8123'}, self.installation)
+        self.assertEqual(result.authentication, config.authentication)
+        self.assertEqual(result.limits, config.limits)
+        self.assertEqual(result.cleanup, config.cleanup)
+
+    def test_native_policy_values_are_validated_with_the_json_contract(self):
+        cases = [{'authenticationRequired': 'yes'}, {'inputXmlMode': 'custom', 'inputXmlBytes': '0'},
+                 {'recordsMode': 'custom', 'recordsCount': '-2'}, {'recordsMode': 'unlimited'},
+                 {'cleanupInputsMode': 'age', 'cleanupInputsDays': 'false'},
+                 {'cleanupLogsMode': 'age', 'cleanupLogsDays': '0'}]
+        for changes in cases:
+            with self.subTest(changes=changes), self.assertRaises((ConfigurationError, maintenance.MaintenanceError)):
+                maintenance._configuration({**self.request(), **changes}, self.installation)
+
+    def test_validate_rejects_cleanup_over_binaries_before_creating_folders(self):
+        request = {**self.request(), 'logsDirectory': str(self.installation.directory)}
+        with self.assertRaises(ConfigurationError):
+            maintenance.execute('validate', request, self.driver)
+        self.assertFalse(self.config.input_directory.exists())
 
     def test_target_mismatch_is_rejected_before_any_mutation(self):
         request = self.request()

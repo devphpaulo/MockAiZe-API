@@ -36,7 +36,7 @@ class CatalogTests(unittest.TestCase):
         before = hashlib.sha256(self.path.read_bytes()).digest()
         snapshot = self.catalog.snapshot('file-1')
         self.assertEqual((snapshot['name'], snapshot['revision']), ('Sample', 7))
-        self.assertEqual(snapshot['libraryPath'], 'Workspace / Examples / Sample')
+        self.assertEqual(snapshot['libraryPath'], 'Workspace/Examples')
         self.catalog.check()
         self.assertEqual(before, hashlib.sha256(self.path.read_bytes()).digest())
 

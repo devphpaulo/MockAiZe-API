@@ -1,11 +1,12 @@
 from pathlib import Path
+import os
 import tempfile
 import unittest
 from unittest.mock import patch
 
-from mockaize_api.config import ApiConfig, save_config
+from mockaize_api.config import ApiConfig, ConfigurationError, load_config, save_config
 from mockaize_api.windows_ops import (CONFIG_EXE, SERVICE_EXE, UNINSTALL_EXE, Installation, Installer,
-                                     validate_origins, wait_health)
+                                     SERVICE_SID, WindowsDriver, validate_origins, wait_health)
 
 
 class FakeDriver:
@@ -27,6 +28,9 @@ class FakeDriver:
 
     def configure(self, installation, config):
         self.events.append(('configure', config.port))
+
+    def revoke_input_delete(self, config, root):
+        self.events.append(('revoke input delete', config.input_directory))
 
     def remove_registration(self):
         self.events.append('remove')
@@ -78,6 +82,195 @@ class InstallerTests(unittest.TestCase):
                     self.installer.install(self.payload)
                 self.assertEqual((self.target / SERVICE_EXE).read_text(), 'old binary')
                 self.assert_preserved()
+
+    def test_installer_rejects_cleanup_over_binary_tree_before_mutation(self):
+        from dataclasses import replace
+        unsafe = replace(self.config, logs_directory=self.target)
+        save_config(self.path, unsafe)
+        with self.assertRaises(ConfigurationError):
+            self.installer.install(self.payload)
+        self.assertEqual((self.target / SERVICE_EXE).read_text(), 'old binary')
+        self.assertFalse(self.target.with_name('installed.staging').exists())
+        self.assertFalse(self.config.input_directory.exists())
+
+    def test_configure_rejects_unsafe_cleanup_before_stopping_the_service(self):
+        from dataclasses import replace
+        unsafe = replace(self.config, logs_directory=self.target)
+        with self.assertRaises(ConfigurationError):
+            self.installer.change_config(unsafe, 'LocalSubnet')
+        self.assertNotIn('stop', self.driver.events)
+        self.assert_preserved()
+
+    def test_configure_protects_the_executing_helper_before_stopping_service(self):
+        from dataclasses import replace
+        helper = self.root / 'python-host'
+        unsafe = replace(self.config, logs_directory=helper)
+        with patch('mockaize_api.windows_ops.sys.executable', str(helper / 'python.exe')):
+            with self.assertRaises(ConfigurationError):
+                self.installer.change_config(unsafe, 'LocalSubnet')
+        self.assertNotIn('stop', self.driver.events)
+
+    def test_input_cleanup_delete_grant_is_opt_in_and_does_not_replace_user_rights(self):
+        from dataclasses import replace
+        from mockaize_api.config import Cleanup, CleanupRule
+        driver = WindowsDriver()
+        with patch.object(driver, 'run') as run, \
+                patch('mockaize_api.windows_ops._current_user_sid', return_value='S-1-5-21-123'):
+            driver.configure_inputs(self.config, self.data)
+            readonly = run.call_args_list
+            run.reset_mock()
+            enabled = replace(self.config, cleanup=Cleanup(inputs=CleanupRule('age', 7)))
+            driver.configure_inputs(enabled, self.data)
+            deletion = run.call_args_list
+            run.reset_mock()
+            driver.configure_inputs(self.config, self.data)
+            disabled = run.call_args_list
+        self.assertTrue(any('/grant:r' in call.args and f'{SERVICE_SID}:(OI)(CI)RX' in call.args
+                            for call in readonly))
+        self.assertTrue(any(f'{SERVICE_SID}:(OI)(IO)(DE)' in call.args for call in deletion))
+        self.assertFalse(any(f'{SERVICE_SID}:(OI)(IO)(DE)' in call.args for call in disabled))
+        self.assertTrue(any('*S-1-5-21-123:(OI)(CI)M' in call.args for call in disabled))
+        self.assertFalse(any(f'{SERVICE_SID}:(OI)(CI)M' in call.args for call in deletion))
+
+    def test_custom_local_preset_directory_gets_read_only_service_access(self):
+        from dataclasses import replace
+        from unittest.mock import MagicMock
+        for exists in (False, True):
+            with self.subTest(exists=exists):
+                presets = self.root / ('presets-present' if exists else 'presets-absent')
+                if exists:
+                    presets.mkdir()
+                config = replace(self.config, presets_directory=presets)
+                driver = WindowsDriver()
+                key = MagicMock()
+                key.__enter__.return_value = key
+                with patch('winreg.CreateKey', return_value=key), patch('winreg.SetValueEx'), \
+                        patch.object(driver, 'run') as run, patch.object(driver, 'firewall'), \
+                        patch.object(driver, 'register_shell'), patch.object(driver, 'configure_inputs'), \
+                        patch('mockaize_api.windows_ops._is_network_path', return_value=False):
+                    driver.configure(Installation(self.target, self.path), config)
+                grants = [call for call in run.call_args_list
+                          if 'icacls.exe' in call.args and str(presets) in call.args]
+                self.assertEqual(bool(grants), exists)
+                self.assertEqual(presets.exists(), exists)
+                self.assertTrue(all(f'{SERVICE_SID}:(OI)(CI)RX' in call.args for call in grants))
+                self.assertFalse(any(f'{SERVICE_SID}:(OI)(CI)M' in call.args for call in grants))
+
+    def test_remote_input_permissions_are_not_changed_locally(self):
+        driver = WindowsDriver()
+        with patch('mockaize_api.windows_ops._is_network_path', return_value=True), \
+                patch.object(driver, 'run') as run:
+            driver.configure_inputs(self.config, self.data)
+        run.assert_not_called()
+
+    def test_moving_inputs_releases_old_delete_grant_and_rollback_releases_new_one(self):
+        from dataclasses import replace
+        from mockaize_api.config import Cleanup, CleanupRule
+        old = replace(self.config, cleanup=Cleanup(inputs=CleanupRule('age', 7)))
+        save_config(self.path, old)
+        new = replace(old, input_directory=self.data / 'other-input')
+        with patch('mockaize_api.windows_ops.wait_health', side_effect=RuntimeError('unhealthy')):
+            with self.assertRaisesRegex(RuntimeError, 'unhealthy'):
+                self.installer.change_config(new, 'LocalSubnet')
+        self.assertIn(('revoke input delete', old.input_directory), self.driver.events)
+        self.assertIn(('revoke input delete', new.input_directory), self.driver.events)
+        self.assertEqual(load_config(self.path).cleanup, old.cleanup)
+
+    def test_failed_delete_revocation_does_not_prevent_configuration_and_service_rollback(self):
+        from dataclasses import replace
+        from mockaize_api.config import Cleanup, CleanupRule
+        from mockaize_api import maintenance
+        old = replace(self.config, cleanup=Cleanup(inputs=CleanupRule('age', 7)))
+        save_config(self.path, old)
+        new = replace(old, input_directory=self.data / 'other-input', port=9999)
+        health_error = RuntimeError('PRIVATE-HEALTH')
+        permission_error = PermissionError('PRIVATE-PERMISSION')
+        def revoke(config, root):
+            if config.input_directory == new.input_directory:
+                raise permission_error
+        with patch('mockaize_api.windows_ops.wait_health', side_effect=health_error), \
+                patch.object(self.driver, 'revoke_input_delete', side_effect=revoke):
+            with self.assertRaises(RuntimeError) as caught:
+                self.installer.change_config(new, 'LocalSubnet')
+        self.assertEqual(load_config(self.path), old)
+        self.assertEqual(self.driver.state, 'running')
+        self.assertEqual(self.driver.events[-2:], [('configure', old.port), 'start'])
+        self.assertIs(caught.exception.original_error, health_error)
+        self.assertIs(caught.exception.__cause__, permission_error)
+        diagnostic = maintenance._safe_message(caught.exception)
+        self.assertIn('exclusão', diagnostic)
+        self.assertNotIn('PRIVATE', diagnostic)
+        self.assertNotIn(str(self.root), diagnostic)
+
+    def test_failed_config_restore_keeps_service_stopped_and_preserves_new_failure(self):
+        from dataclasses import replace
+        import mockaize_api.windows_ops as operations
+        new = replace(self.config, port=9999)
+        original_save = operations.save_config
+        restore_error = PermissionError('PRIVATE-RESTORE')
+        def save(path, config):
+            if config.port == self.config.port:
+                raise restore_error
+            return original_save(path, config)
+        with patch('mockaize_api.windows_ops.wait_health', side_effect=RuntimeError('PRIVATE-HEALTH')), \
+                patch('mockaize_api.windows_ops.save_config', side_effect=save):
+            with self.assertRaises(RuntimeError) as caught:
+                self.installer.change_config(new, 'LocalSubnet')
+        self.assertEqual(self.driver.events[-1], ('configure', self.config.port))
+        self.assertEqual(self.driver.events.count('start'), 1)
+        self.assertEqual(self.driver.state, 'stopped')
+        self.assertIs(caught.exception.__cause__, restore_error)
+        self.assertIn('incompleta', str(caught.exception))
+        self.assertNotIn('PRIVATE', str(caught.exception))
+
+    def test_failed_service_configuration_restore_never_restarts_with_uncertain_state(self):
+        from dataclasses import replace
+        new = replace(self.config, port=9999)
+        original_configure = self.driver.configure
+        restore_error = RuntimeError('PRIVATE-SERVICE-RESTORE')
+        def configure(installation, config):
+            original_configure(installation, config)
+            if config.port == self.config.port:
+                raise restore_error
+        with patch('mockaize_api.windows_ops.wait_health', side_effect=RuntimeError('PRIVATE-HEALTH')), \
+                patch.object(self.driver, 'configure', side_effect=configure):
+            with self.assertRaises(RuntimeError) as caught:
+                self.installer.change_config(new, 'LocalSubnet')
+        self.assertEqual(load_config(self.path), self.config)
+        self.assertEqual(self.driver.events.count('start'), 1)
+        self.assertEqual(self.driver.state, 'stopped')
+        self.assertIs(caught.exception.__cause__, restore_error)
+        self.assertIn('incompleta', str(caught.exception))
+
+    @unittest.skipUnless(os.name == 'nt', 'Windows ACL inheritance')
+    def test_real_input_file_delete_inheritance_changes_without_removing_user_grant(self):
+        from dataclasses import replace
+        import win32security
+        from mockaize_api.config import Cleanup, CleanupRule
+        from mockaize_api.windows_ops import _current_user_sid
+        directory = self.config.input_directory / 'existing-subdirectory'
+        directory.mkdir(parents=True)
+        file = directory / 'disposable.xml'
+        file.write_bytes(b'disposable')
+        user_sid = _current_user_sid()
+        def rights(sid):
+            descriptor = win32security.GetNamedSecurityInfo(str(file), win32security.SE_FILE_OBJECT,
+                                                           win32security.DACL_SECURITY_INFORMATION)
+            acl = descriptor.GetSecurityDescriptorDacl()
+            return [(acl.GetAce(index)[0][1], acl.GetAce(index)[1]) for index in range(acl.GetAceCount())
+                    if win32security.ConvertSidToStringSid(acl.GetAce(index)[2]) == sid]
+        driver = WindowsDriver()
+        driver.configure_inputs(self.config, self.data)
+        initial_user = rights(user_sid)
+        self.assertTrue(initial_user)
+        self.assertFalse(any(mask & 0x10000 for _, mask in rights('S-1-5-20')))
+        enabled = replace(self.config, cleanup=Cleanup(inputs=CleanupRule('age', 7)))
+        driver.configure_inputs(enabled, self.data)
+        self.assertTrue(any(flags & 0x10 and mask & 0x10000 for flags, mask in rights('S-1-5-20')))
+        driver.configure_inputs(self.config, self.data)
+        self.assertFalse(any(mask & 0x10000 for _, mask in rights('S-1-5-20')))
+        self.assertEqual(rights(user_sid), initial_user)
+        self.assertEqual(file.read_bytes(), b'disposable')
 
     def test_scm_is_queried_again_after_staging(self):
         with patch.object(self.driver, 'status', side_effect=['stopped', 'stopped', 'running']):

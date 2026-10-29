@@ -18,6 +18,7 @@ headers {
 
 body:json {
   {
+    "inputXml": "<Document><Record><Value>valor-1</Value></Record><Record><Value>valor-2</Value></Record></Document>",
     "returnSelection": {
       "type": "all"
     },
@@ -28,5 +29,5 @@ body:json {
 }
 
 docs {
-  Usa o XML de exemplo salvo no banco e gera para todos os registros e todos os modelos de retorno. Todos os modelos selecionados precisam estar prontos. Salva um XML por modelo em Saídas. inputRecords seleciona registros; returnSelection seleciona modelos. Para enviar seu próprio XML, use inputXml no corpo; para receber o XML completo no JSON, use delivery content.
+  inputXml é obrigatório e deve ser compatível com o modelo da sua variação. Gera para todos os registros e todos os modelos salvos; falha se algum modelo selecionado não estiver pronto. Salva um XML por modelo em Saídas. Não aceita inputFilePath nem substitui a entrada por XML salvo. inputRecords seleciona registros; returnSelection seleciona modelos. delivery content retorna XML dentro do JSON.
 }

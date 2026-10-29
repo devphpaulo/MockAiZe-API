@@ -1,9 +1,10 @@
 """Configuração operacional sem segredos, aplicada somente no início."""
 
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass, field
 import json
 import os
 from pathlib import Path
+import re
 import tempfile
 
 MAX_CONFIG_BYTES = 65_536
@@ -12,6 +13,7 @@ PATH_FIELDS = {
     'outputDirectory': 'output_directory', 'logsDirectory': 'logs_directory',
 }
 FIELD_NAMES = {**PATH_FIELDS, 'port': 'port', 'host': 'host', 'firewallAccess': 'firewall_access'}
+OPTIONAL_FIELDS = {'presetsDirectory', 'authentication', 'limits', 'cleanup'}
 
 
 class ConfigurationError(ValueError):
@@ -20,6 +22,105 @@ class ConfigurationError(ValueError):
     def __init__(self, field: str, message: str):
         self.field = field
         super().__init__(message)
+
+
+def _object(value: object, allowed: set[str], field_name: str) -> dict:
+    if not isinstance(value, dict) or set(value) - allowed:
+        raise ConfigurationError(field_name, 'Informe apenas os campos documentados.')
+    return value
+
+
+@dataclass(frozen=True)
+class Limit:
+    mode: str = 'default'
+    value: int | None = None
+
+    @classmethod
+    def from_mapping(cls, value: object, unit: str, field_name: str) -> 'Limit':
+        value = _object(value, {'mode', unit}, field_name)
+        mode = value.get('mode')
+        if mode not in ('default', 'custom', 'disabled'):
+            raise ConfigurationError(field_name, 'Use default, custom ou disabled.')
+        if mode == 'custom':
+            amount = value.get(unit)
+            if type(amount) is not int or amount < 1:
+                raise ConfigurationError(field_name, 'O limite personalizado deve ser um inteiro positivo.')
+            return cls(mode, amount)
+        if unit in value:
+            raise ConfigurationError(field_name, 'Informe um valor somente no modo custom.')
+        return cls(mode)
+
+    def resolve(self, default: int) -> int | None:
+        return {'default': default, 'custom': self.value, 'disabled': None}[self.mode]
+
+    def to_mapping(self, unit: str) -> dict:
+        return {'mode': self.mode, **({unit: self.value} if self.mode == 'custom' else {})}
+
+
+@dataclass(frozen=True)
+class Limits:
+    input_xml: Limit = field(default_factory=Limit)
+    records: Limit = field(default_factory=Limit)
+
+    @classmethod
+    def from_mapping(cls, value: object) -> 'Limits':
+        value = _object(value, {'inputXml', 'records'}, 'limits')
+        return cls(Limit.from_mapping(value.get('inputXml', {'mode': 'default'}), 'bytes', 'limits.inputXml'),
+                   Limit.from_mapping(value.get('records', {'mode': 'default'}), 'count', 'limits.records'))
+
+    def to_mapping(self) -> dict:
+        return {'inputXml': self.input_xml.to_mapping('bytes'), 'records': self.records.to_mapping('count')}
+
+
+@dataclass(frozen=True)
+class Authentication:
+    required: bool = True
+
+    @classmethod
+    def from_mapping(cls, value: object) -> 'Authentication':
+        value = _object(value, {'required'}, 'authentication')
+        required = value.get('required', True)
+        if type(required) is not bool:
+            raise ConfigurationError('authentication.required', 'Informe true ou false.')
+        return cls(required)
+
+
+@dataclass(frozen=True)
+class CleanupRule:
+    mode: str = 'disabled'
+    days: int | None = None
+
+    @classmethod
+    def from_mapping(cls, value: object, field_name: str) -> 'CleanupRule':
+        value = _object(value, {'mode', 'days'}, field_name)
+        if value.get('mode') == 'disabled' and 'days' not in value:
+            return cls()
+        if value.get('mode') == 'age' and type(value.get('days')) is int and value['days'] >= 1:
+            return cls('age', value['days'])
+        raise ConfigurationError(field_name, 'Use disabled ou age com days inteiro positivo.')
+
+    def to_mapping(self) -> dict:
+        return {'mode': self.mode, **({'days': self.days} if self.mode == 'age' else {})}
+
+
+@dataclass(frozen=True)
+class Cleanup:
+    inputs: CleanupRule = field(default_factory=CleanupRule)
+    outputs: CleanupRule = field(default_factory=CleanupRule)
+    # None preserves omission: policy.json supplies the migration default for logs.
+    logs: CleanupRule | None = None
+
+    @classmethod
+    def from_mapping(cls, value: object) -> 'Cleanup':
+        value = _object(value, {'inputs', 'outputs', 'logs'}, 'cleanup')
+        return cls(**{key: CleanupRule.from_mapping(rule, 'cleanup.' + key)
+                      for key, rule in value.items()})
+
+    def to_mapping(self) -> dict:
+        result = {'inputs': self.inputs.to_mapping(), 'outputs': self.outputs.to_mapping()}
+        if self.logs is not None:
+            result['logs'] = self.logs.to_mapping()
+        return result
 
 
 @dataclass(frozen=True)
@@ -31,11 +132,20 @@ class ApiConfig:
     port: int
     host: str
     firewall_access: str
+    presets_directory: Path | None = None
+    authentication: Authentication = field(default_factory=Authentication)
+    limits: Limits = field(default_factory=Limits)
+    cleanup: Cleanup = field(default_factory=Cleanup)
+
+    def __post_init__(self):
+        if self.presets_directory is None:
+            object.__setattr__(self, 'presets_directory', self.database_path.parent / 'Presets')
 
     @classmethod
     def from_mapping(cls, values: object) -> 'ApiConfig':
-        if not isinstance(values, dict) or set(values) != set(FIELD_NAMES):
-            raise ConfigurationError('config', 'Informe exatamente os sete campos operacionais documentados.')
+        if (not isinstance(values, dict) or set(FIELD_NAMES) - set(values)
+                or set(values) - set(FIELD_NAMES) - OPTIONAL_FIELDS):
+            raise ConfigurationError('config', 'Informe os sete campos operacionais e somente opções documentadas.')
         paths = {attr: _absolute_path(values[key], key) for key, attr in PATH_FIELDS.items()}
         port = values['port']
         if type(port) is not int or not 1 <= port <= 65535:
@@ -45,12 +155,84 @@ class ApiConfig:
             raise ConfigurationError('host', 'Use 127.0.0.1 com N ou 0.0.0.0 com Y.')
         if paths['output_directory'].resolve() == paths['logs_directory'].resolve():
             raise ConfigurationError('logsDirectory', 'Saída e logs devem usar diretórios distintos.')
-        return cls(**paths, port=port, host=values['host'], firewall_access=values['firewallAccess'])
+        config = cls(**paths, port=port, host=values['host'], firewall_access=values['firewallAccess'],
+                     presets_directory=_absolute_path(values['presetsDirectory'], 'presetsDirectory')
+                     if 'presetsDirectory' in values else None,
+                     authentication=Authentication.from_mapping(values.get('authentication', {})),
+                     limits=Limits.from_mapping(values.get('limits', {})),
+                     cleanup=Cleanup.from_mapping(values.get('cleanup', {})))
+        validate_cleanup_paths(config)
+        return config
 
     def to_mapping(self) -> dict:
-        attributes = asdict(self)
-        return {key: str(attributes[attr]) if key in PATH_FIELDS else attributes[attr]
-                for key, attr in FIELD_NAMES.items()}
+        result = {key: str(getattr(self, attr)) if key in PATH_FIELDS else getattr(self, attr)
+                  for key, attr in FIELD_NAMES.items()}
+        result.update(presetsDirectory=str(self.presets_directory),
+                      authentication={'required': self.authentication.required},
+                      limits=self.limits.to_mapping(), cleanup=self.cleanup.to_mapping())
+        return result
+
+
+def validate_cleanup_paths(config: ApiConfig, protected_paths: tuple[Path, ...] = ()) -> None:
+    """Validate canonical roots; callers add config/state/credentials and binary locations.
+
+    No filesystem mutation is performed. The worker must revalidate before deletion.
+    """
+    roots = {'inputs': config.input_directory.resolve(), 'outputs': config.output_directory.resolve(),
+             'logs': config.logs_directory.resolve()}
+    protected = [config.database_path.resolve(), config.presets_directory.resolve(),
+                 *(Path(path).resolve() for path in protected_paths)]
+    home = Path.home().resolve()
+    profile_paths = _windows_profile_paths() if any(
+        getattr(config.cleanup, key) is None or getattr(config.cleanup, key).mode != 'disabled'
+        for key in roots) else set()
+    for key, root in roots.items():
+        rule = getattr(config.cleanup, key)
+        if rule is not None and rule.mode == 'disabled':
+            continue
+        if (root == Path(root.anchor) or home.is_relative_to(root)
+                or any(profile.is_relative_to(root) for profile in profile_paths)):
+            raise ConfigurationError('cleanup.' + key, 'A limpeza exige um diretório específico da aplicação.')
+        if any(path.is_relative_to(root) or root.is_relative_to(path)
+               for other, path in roots.items() if other != key):
+            raise ConfigurationError('cleanup.' + key, 'As raízes de limpeza não podem ser iguais ou sobrepostas.')
+        if any(path.is_relative_to(root) or root.is_relative_to(path) for path in protected):
+            raise ConfigurationError('cleanup.' + key, 'A raiz de limpeza contém arquivos ou diretórios protegidos.')
+
+
+def _windows_profile_paths() -> set[Path]:
+    """Read Windows' registered profile locations, independently of the service account.
+
+    Microsoft documents ProfilesDirectory and ProfileImagePath under ProfileList.
+    An unavailable registry must not silently turn an empty profile list into permission to delete.
+    """
+    if os.name != 'nt':
+        return set()
+    def profile_path(value):
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError
+        expanded = os.path.expandvars(value)
+        path = Path(expanded)
+        if not path.is_absolute() or re.search(r'%[^%]+%', expanded):
+            raise ValueError
+        return path.resolve()
+    try:
+        import winreg
+        paths = set()
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
+                            r'SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList') as profiles:
+            directory, _ = winreg.QueryValueEx(profiles, 'ProfilesDirectory')
+            paths.add(profile_path(directory))
+            count, _, _ = winreg.QueryInfoKey(profiles)
+            for index in range(count):
+                with winreg.OpenKey(profiles, winreg.EnumKey(profiles, index)) as profile:
+                    image, _ = winreg.QueryValueEx(profile, 'ProfileImagePath')
+                    paths.add(profile_path(image))
+        if not paths or any(not path.is_absolute() for path in paths):
+            raise ValueError
+        return paths
+    except (OSError, ValueError, TypeError):
+        raise ConfigurationError('cleanup', 'Não foi possível verificar os diretórios de perfis protegidos.') from None
 
 
 def _absolute_path(value: object, field: str) -> Path:

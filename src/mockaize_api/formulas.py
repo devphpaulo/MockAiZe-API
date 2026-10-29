@@ -180,11 +180,7 @@ def evaluate(f,c,depth=0):
     if kind=='compose':
         parts=f.get('parts',[])
         if not isinstance(parts,list) or not 1<=len(parts)<=100:raise ValueError('Composição exige de 1 a 100 partes.')
-        values=[];total=0
-        for part in parts:
-            result=evaluate(part,c,depth+1);total+=len(result.encode('utf-8'))
-            if total>100_000_000:raise ValueError('Composição excede 100 MB.')
-            values.append(result)
+        values=[evaluate(part,c,depth+1) for part in parts]
         return sum_decimals(values) if f.get('operation')=='sum' else (f.get('separator') or '').join(values)
     raise ValueError('Escolha um gerador válido.')
 

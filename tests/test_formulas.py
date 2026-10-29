@@ -4,6 +4,21 @@ from mockaize_api.formulas import evaluate, valid_cpf, valid_cnpj, filename
 
 
 class FormulaTests(unittest.TestCase):
+    def test_compose_has_no_aggregate_output_byte_cap(self):
+        class ReportedBytes:
+            def __len__(self):
+                return 100000001
+
+        class ReportedText(str):
+            def __str__(self):
+                return self
+
+            def encode(self, *args, **kwargs):
+                return ReportedBytes()
+
+        formula = {'type': 'compose', 'parts': [{'type': 'literal', 'value': ReportedText('x')}]}
+        self.assertEqual(evaluate(formula, {}), 'x')
+
     def test_deterministic_formula_types(self):
         context={'configName':'A B','count':3,'recordIndex':2,'fileIndex':4,'sourceValue':lambda p:'7','outputValue':lambda p:'8','groupValues':lambda f:['0.1','0.2'],'profiles':{},'baseDate':'2026-10-23','referenceDateTime':'2026-10-23T12:00:00Z'}
         samples=[({'type':'literal','value':'abc'},'abc'),({'type':'copy','path':'p'},'7'),({'type':'field','path':'p'},'8'),({'type':'groupSum'},'0.3'),({'type':'config'},'AB'),({'type':'count'},'3'),({'type':'list','values':'x\ny','index':1},'y'),({'type':'zeros','length':3},'000'),({'type':'sequence','width':2},'03'),({'type':'sequence','width':2,'scope':'file'},'05'),({'type':'compose','operation':'sum','parts':[{'type':'literal','value':'0.1'},{'type':'literal','value':'0.2'}]},'0.3'),({'type':'date','mode':'business'},'2026-10-26')]

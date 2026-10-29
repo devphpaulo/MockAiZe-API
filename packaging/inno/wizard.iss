@@ -5,12 +5,185 @@ var
   FoldersPage: TInputDirWizardPage;
   NetworkPage: TInputQueryWizardPage;
   AccessPage: TInputOptionWizardPage;
+  AuthenticationPage: TInputOptionWizardPage;
+  LimitsPage, CleanupPage: TOutputMsgWizardPage;
+  InputLimitMode, RecordsLimitMode, CleanupInputsMode, CleanupOutputsMode, CleanupLogsMode: TNewComboBox;
+  InputLimitValue, RecordsLimitValue, CleanupInputsDays, CleanupOutputsDays, CleanupLogsDays: TNewEdit;
   StopButton, StartButton, RestartButton: TNewButton;
   ServiceState: String;
   ServiceLabel: TNewStaticText;
   FinishedText: String;
   ApiKeyValue: String;
   ApiKeyEdit: TNewEdit;
+
+function PolicyMode(Page: TWizardPage; TopPosition: Integer; const CaptionText: String;
+  IsLimit: Boolean): TNewComboBox;
+var
+  LabelControl: TNewStaticText;
+begin
+  LabelControl := TNewStaticText.Create(WizardForm);
+  LabelControl.Parent := Page.Surface;
+  LabelControl.Left := 0;
+  LabelControl.Top := ScaleY(TopPosition + 4);
+  LabelControl.Caption := CaptionText;
+  LabelControl.AutoSize := True;
+  Result := TNewComboBox.Create(WizardForm);
+  Result.Parent := Page.Surface;
+  Result.Left := ScaleX(155);
+  Result.Top := ScaleY(TopPosition);
+  Result.Width := ScaleX(145);
+  Result.Style := csDropDownList;
+  if IsLimit then begin
+    Result.Items.Add('Padrão');
+    Result.Items.Add('Personalizado');
+    Result.Items.Add('Desabilitado');
+  end else begin
+    Result.Items.Add('Desativada');
+    Result.Items.Add('Por idade');
+  end;
+  Result.ItemIndex := 0;
+end;
+
+function PolicyNumber(Page: TWizardPage; TopPosition: Integer): TNewEdit;
+begin
+  Result := TNewEdit.Create(WizardForm);
+  Result.Parent := Page.Surface;
+  Result.Left := ScaleX(315);
+  Result.Top := ScaleY(TopPosition);
+  Result.Width := ScaleX(100);
+end;
+
+procedure PolicyModeChanged(Sender: TObject);
+begin
+  if InputLimitMode.ItemIndex = 0 then InputLimitValue.Text := '2000000';
+  if RecordsLimitMode.ItemIndex = 0 then RecordsLimitValue.Text := '500';
+  InputLimitValue.Enabled := InputLimitMode.Enabled and (InputLimitMode.ItemIndex = 1);
+  RecordsLimitValue.Enabled := RecordsLimitMode.Enabled and (RecordsLimitMode.ItemIndex = 1);
+  CleanupInputsDays.Enabled := CleanupInputsMode.Enabled and (CleanupInputsMode.ItemIndex = 1);
+  CleanupOutputsDays.Enabled := CleanupOutputsMode.Enabled and (CleanupOutputsMode.ItemIndex = 1);
+  CleanupLogsDays.Enabled := CleanupLogsMode.Enabled and (CleanupLogsMode.ItemIndex = 1);
+end;
+
+function LimitSummary(Mode: TNewComboBox; Number: TNewEdit; const UnitText: String): String;
+begin
+  Result := Mode.Text;
+  if Mode.ItemIndex <> 2 then Result := Result + ' (' + Number.Text + UnitText + ')';
+end;
+
+function CleanupSummary(Mode: TNewComboBox; Number: TNewEdit): String;
+begin
+  Result := Mode.Text;
+  if Mode.ItemIndex = 1 then Result := Result + ' (' + Number.Text + ' dias)';
+end;
+
+function LimitModeValue(Control: TNewComboBox): String;
+begin
+  if Control.ItemIndex = 1 then Result := 'custom'
+  else if Control.ItemIndex = 2 then Result := 'disabled'
+  else Result := 'default';
+end;
+
+function CleanupModeValue(Control: TNewComboBox): String;
+begin
+  if Control.ItemIndex = 1 then Result := 'age' else Result := 'disabled';
+end;
+
+function PolicyField(const Key, DefaultValue, OverrideFile: String): String;
+begin
+  if OverrideFile = '' then Result := ResultValue(Key, DefaultValue)
+  else Result := GetIniString('setup', Key, DefaultValue, OverrideFile);
+end;
+
+procedure LoadLimitMode(Control: TNewComboBox; const Value: String);
+begin
+  if Value = 'default' then Control.ItemIndex := 0
+  else if Value = 'custom' then Control.ItemIndex := 1
+  else if Value = 'disabled' then Control.ItemIndex := 2
+  else RaiseException('Modo de limite inválido. Use default, custom ou disabled.');
+end;
+
+procedure LoadCleanupMode(Control: TNewComboBox; const Value: String);
+begin
+  if Value = 'disabled' then Control.ItemIndex := 0
+  else if Value = 'age' then Control.ItemIndex := 1
+  else RaiseException('Modo de limpeza inválido. Use disabled ou age.');
+end;
+
+procedure LoadPolicyFields(const OverrideFile: String);
+var
+  Required: String;
+begin
+  if AuthenticationPage.SelectedValueIndex = 1 then Required := 'false' else Required := 'true';
+  Required := PolicyField('authenticationRequired', Required, OverrideFile);
+  if Required = 'true' then AuthenticationPage.SelectedValueIndex := 0
+  else if Required = 'false' then AuthenticationPage.SelectedValueIndex := 1
+  else RaiseException('Autenticação deve ser true ou false.');
+  LoadLimitMode(InputLimitMode, PolicyField('inputXmlMode', LimitModeValue(InputLimitMode), OverrideFile));
+  LoadLimitMode(RecordsLimitMode, PolicyField('recordsMode', LimitModeValue(RecordsLimitMode), OverrideFile));
+  InputLimitValue.Text := PolicyField('inputXmlBytes', InputLimitValue.Text, OverrideFile);
+  RecordsLimitValue.Text := PolicyField('recordsCount', RecordsLimitValue.Text, OverrideFile);
+  LoadCleanupMode(CleanupInputsMode, PolicyField('cleanupInputsMode', CleanupModeValue(CleanupInputsMode), OverrideFile));
+  LoadCleanupMode(CleanupOutputsMode, PolicyField('cleanupOutputsMode', CleanupModeValue(CleanupOutputsMode), OverrideFile));
+  LoadCleanupMode(CleanupLogsMode, PolicyField('cleanupLogsMode', CleanupModeValue(CleanupLogsMode), OverrideFile));
+  CleanupInputsDays.Text := PolicyField('cleanupInputsDays', CleanupInputsDays.Text, OverrideFile);
+  CleanupOutputsDays.Text := PolicyField('cleanupOutputsDays', CleanupOutputsDays.Text, OverrideFile);
+  CleanupLogsDays.Text := PolicyField('cleanupLogsDays', CleanupLogsDays.Text, OverrideFile);
+  PolicyModeChanged(nil);
+end;
+
+procedure CreatePolicyPages(AfterPageID: Integer);
+begin
+  AuthenticationPage := CreateInputOptionPage(AfterPageID, 'Autenticação',
+    'Escolha se as chamadas exigem credencial.',
+    'O login por API key emite um Bearer de 30 minutos. Credenciais inválidas são sempre recusadas.', True, False);
+  AuthenticationPage.Add('Obrigatória: API key ou Bearer');
+  AuthenticationPage.Add('Opcional: permitir chamadas sem credencial');
+  AuthenticationPage.SelectedValueIndex := 0;
+  LimitsPage := CreateOutputMsgPage(AuthenticationPage.ID, 'Limites de geração',
+    'Escolha o limite de entrada e a quantidade de registros.',
+    'Padrão: XML de entrada de 2.000.000 bytes e 500 registros. A saída não tem teto global de bytes.');
+  InputLimitMode := PolicyMode(LimitsPage, 70, 'Entrada XML (bytes):', True);
+  InputLimitValue := PolicyNumber(LimitsPage, 70);
+  InputLimitValue.Text := '2000000';
+  RecordsLimitMode := PolicyMode(LimitsPage, 115, 'Registros:', True);
+  RecordsLimitValue := PolicyNumber(LimitsPage, 115);
+  RecordsLimitValue.Text := '500';
+  CleanupPage := CreateOutputMsgPage(LimitsPage.ID, 'Limpeza ao iniciar',
+    'Escolha a retenção de cada pasta.',
+    'Uma rodada ao iniciar remove arquivos antigos de qualquer origem e extensão, inclusive em subpastas. Entradas exige ativação explícita. O valor à direita é a idade em dias.');
+  CleanupInputsMode := PolicyMode(CleanupPage, 85, 'Entradas (dias):', False);
+  CleanupInputsDays := PolicyNumber(CleanupPage, 85);
+  CleanupOutputsMode := PolicyMode(CleanupPage, 130, 'Saídas (dias):', False);
+  CleanupOutputsDays := PolicyNumber(CleanupPage, 130);
+  CleanupLogsMode := PolicyMode(CleanupPage, 175, 'Logs (dias):', False);
+  CleanupLogsDays := PolicyNumber(CleanupPage, 175);
+  CleanupLogsMode.ItemIndex := 1;
+  CleanupInputsDays.Text := '30';
+  CleanupOutputsDays.Text := '30';
+  CleanupLogsDays.Text := '30';
+  InputLimitMode.OnChange := @PolicyModeChanged;
+  RecordsLimitMode.OnChange := @PolicyModeChanged;
+  CleanupInputsMode.OnChange := @PolicyModeChanged;
+  CleanupOutputsMode.OnChange := @PolicyModeChanged;
+  CleanupLogsMode.OnChange := @PolicyModeChanged;
+  LoadPolicyFields('');
+end;
+
+procedure WritePolicyRequest;
+begin
+  if AuthenticationPage.SelectedValueIndex = 1 then SetRequestValue('authenticationRequired', 'false')
+  else SetRequestValue('authenticationRequired', 'true');
+  SetRequestValue('inputXmlMode', LimitModeValue(InputLimitMode));
+  if InputLimitMode.ItemIndex = 1 then SetRequestValue('inputXmlBytes', Trim(InputLimitValue.Text));
+  SetRequestValue('recordsMode', LimitModeValue(RecordsLimitMode));
+  if RecordsLimitMode.ItemIndex = 1 then SetRequestValue('recordsCount', Trim(RecordsLimitValue.Text));
+  SetRequestValue('cleanupInputsMode', CleanupModeValue(CleanupInputsMode));
+  if CleanupInputsMode.ItemIndex = 1 then SetRequestValue('cleanupInputsDays', Trim(CleanupInputsDays.Text));
+  SetRequestValue('cleanupOutputsMode', CleanupModeValue(CleanupOutputsMode));
+  if CleanupOutputsMode.ItemIndex = 1 then SetRequestValue('cleanupOutputsDays', Trim(CleanupOutputsDays.Text));
+  SetRequestValue('cleanupLogsMode', CleanupModeValue(CleanupLogsMode));
+  if CleanupLogsMode.ItemIndex = 1 then SetRequestValue('cleanupLogsDays', Trim(CleanupLogsDays.Text));
+end;
 
 procedure RefreshServiceLabel;
 begin
@@ -66,6 +239,7 @@ begin
   SetRequestValue('logsDirectory', Trim(FoldersPage.Values[2]));
   SetRequestValue('port', Trim(NetworkPage.Values[0]));
   SetRequestValue('origins', Trim(NetworkPage.Values[1]));
+  WritePolicyRequest;
   if AccessPage.SelectedValueIndex = 1 then begin
     SetRequestValue('host', '0.0.0.0');
     SetRequestValue('firewallAccess', 'Y');
@@ -174,6 +348,7 @@ begin
   NetworkPage.Add('Origens confiáveis para acesso em rede:', False);
   NetworkPage.Values[0] := ResultValue('port', '6578');
   NetworkPage.Values[1] := ResultValue('origins', 'LocalSubnet');
+  CreatePolicyPages(NetworkPage.ID);
   OverrideFile := ExpandConstant('{param:REQUEST|}');
   if OverrideFile <> '' then begin
     if not FileExists(OverrideFile) then RaiseException('Arquivo de configuração solicitado não encontrado.');
@@ -188,6 +363,7 @@ begin
     FoldersPage.Values[2] := GetIniString('setup', 'logsDirectory', FoldersPage.Values[2], OverrideFile);
     NetworkPage.Values[0] := GetIniString('setup', 'port', NetworkPage.Values[0], OverrideFile);
     NetworkPage.Values[1] := GetIniString('setup', 'origins', NetworkPage.Values[1], OverrideFile);
+    LoadPolicyFields(OverrideFile);
     if GetIniString('setup', 'firewallAccess', 'N', OverrideFile) = 'Y' then AccessPage.SelectedValueIndex := 1
     else AccessPage.SelectedValueIndex := 0;
 #if Frontend == "setup"
@@ -208,6 +384,13 @@ begin
     AccessPage.CheckListBox.Enabled := False;
     NetworkPage.Edits[0].Enabled := False;
     NetworkPage.Edits[1].Enabled := False;
+    AuthenticationPage.CheckListBox.Enabled := False;
+    InputLimitMode.Enabled := False;
+    RecordsLimitMode.Enabled := False;
+    CleanupInputsMode.Enabled := False;
+    CleanupOutputsMode.Enabled := False;
+    CleanupLogsMode.Enabled := False;
+    PolicyModeChanged(nil);
   end;
 #endif
 end;
@@ -233,8 +416,9 @@ begin
       Result := False;
       Exit;
     end;
+  end else if CurPageID = CleanupPage.ID then begin
     WriteConfigurationRequest;
-    Result := CallBridge('validate', 'Validando banco, pastas, porta e configuração...');
+    Result := CallBridge('validate', 'Validando banco, pastas, porta e políticas...');
   end;
 end;
 
@@ -247,7 +431,15 @@ begin
     'Entradas: ' + FoldersPage.Values[0] + NewLine +
     'Saídas: ' + FoldersPage.Values[1] + NewLine +
     'Logs: ' + FoldersPage.Values[2] + NewLine +
-    'Porta: ' + NetworkPage.Values[0] + NewLine;
+    'Porta: ' + NetworkPage.Values[0] + NewLine +
+    'Limites: entrada ' + LimitSummary(InputLimitMode, InputLimitValue, ' bytes') + '; registros ' +
+    LimitSummary(RecordsLimitMode, RecordsLimitValue, '') + NewLine +
+    'Limpeza: entradas ' + CleanupSummary(CleanupInputsMode, CleanupInputsDays) + '; saídas ' +
+    CleanupSummary(CleanupOutputsMode, CleanupOutputsDays) + '; logs ' +
+    CleanupSummary(CleanupLogsMode, CleanupLogsDays) + NewLine;
+  if AuthenticationPage.SelectedValueIndex = 0 then
+    Result := Result + 'Autenticação obrigatória (API key ou Bearer).' + NewLine
+  else Result := Result + 'Autenticação opcional.' + NewLine;
   if AccessPage.SelectedValueIndex = 1 then
     Result := Result + 'Rede local; origens: ' + NetworkPage.Values[1]
   else Result := Result + 'Acesso somente neste computador (127.0.0.1).';

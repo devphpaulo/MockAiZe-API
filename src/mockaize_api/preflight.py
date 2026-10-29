@@ -3,13 +3,13 @@
 Compatibilidade do schema do estúdio será validada pelo leitor COD-02.
 """
 
-from contextlib import closing
 import os
 import socket
-import sqlite3
 import tempfile
 
+from .catalog import Catalog
 from .config import ApiConfig
+from .errors import ApiError
 
 
 class PreflightError(RuntimeError):
@@ -18,16 +18,11 @@ class PreflightError(RuntimeError):
         super().__init__(message)
 
 
-def _check_database(config: ApiConfig) -> None:
+def _check_catalog(config: ApiConfig) -> None:
     try:
-        if not config.database_path.is_file():
-            raise OSError
-        uri = config.database_path.resolve().as_uri() + '?mode=ro'
-        with closing(sqlite3.connect(uri, uri=True, timeout=2)) as connection:
-            connection.execute('PRAGMA query_only=ON')
-            connection.execute('SELECT name FROM sqlite_master LIMIT 1').fetchall()
-    except (OSError, sqlite3.Error):
-        raise PreflightError('databasePath', 'O banco SQLite não está acessível para leitura.') from None
+        Catalog(config.database_path, config.presets_directory).preflight()
+    except ApiError:
+        raise PreflightError('catalog', 'Não há um catálogo de presets ou banco SQLite acessível.') from None
 
 
 def _check_directories(config: ApiConfig) -> None:
@@ -59,6 +54,6 @@ def _check_port(config: ApiConfig) -> None:
 
 
 def check_environment(config: ApiConfig) -> None:
-    _check_database(config)
+    _check_catalog(config)
     _check_directories(config)
     _check_port(config)
