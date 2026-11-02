@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 import unittest
 from mockaize_api import faker_catalog
@@ -14,6 +15,10 @@ class CatalogueTests(unittest.TestCase):
                     item.pop('returnAnnotation', None)
                     for parameter in item['providerParameters']:
                         parameter.pop('annotation', None)
+                        default = parameter.get('default')
+                        # Faker binds some date defaults at provider import time.
+                        if isinstance(default, str) and re.fullmatch(r'\d{4}-\d{2}-\d{2}', default):
+                            parameter['default'] = '<provider-date>'
         self.assertEqual(actual, expected)
         self.assertEqual(len(expected['categories']), 15)
         self.assertNotIn('currency', [category['id'] for category in expected['categories']])
