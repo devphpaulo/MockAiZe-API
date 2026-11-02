@@ -10,7 +10,8 @@ import sys
 EXECUTABLES = {'release/MockAiZe-API-Setup.exe': (True, 0x14c, 20_000_000),
                'build/payload/MockAiZeApiConfig.exe': (True, 0x14c, 3_000_000),
                'release/MockAiZeApiUninstall.exe': (True, 0x14c, 3_000_000),
-               'build/payload/MockAiZeApiService.exe': (False, 0x8664, 5_000_000)}
+               # Faker includes its offline provider catalogue in the service archive.
+               'build/payload/MockAiZeApiService.exe': (False, 0x8664, 12_000_000)}
 
 
 def validate_payload(names):
