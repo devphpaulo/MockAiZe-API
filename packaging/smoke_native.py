@@ -1,4 +1,5 @@
 """Real native lifecycle test, permitted only on disposable GitHub Windows runners."""
+from contextlib import closing
 import configparser
 import ctypes
 import hashlib
@@ -48,7 +49,7 @@ def main():
         catalogue = faker_manifest()
         faker_ids = [category['items'][0]['id'] for category in catalogue['categories']]
         faker_ids.append(next(item['id'] for item in catalogue['legacyItems'] if item['category'] == 'currency'))
-        with sqlite3.connect(source) as db:
+        with closing(sqlite3.connect(source)) as db, db:
             saved = json.loads(db.execute("SELECT config_json FROM variations WHERE id='file-1'").fetchone()[0])
             field = json.dumps([{'ns': '', 'name': name, 'index': 1} for name in ('Document', 'Record', 'Value')])
             saved['rulesByMode']['new'][field] = {'generator': {'type': 'compose', 'separator': '|', 'parts': [
