@@ -32,6 +32,20 @@ class CatalogTests(unittest.TestCase):
             mutate(config)
             db.execute('UPDATE variations SET config_json=?', (json.dumps(config),))
 
+    def test_sqlite_validates_faker_formulas_and_manual_seed(self):
+        formula = {'type': 'faker', 'catalogVersion': 1, 'catalogId': 'person.name'}
+        self.update_config(lambda config: config['filenameByMode'].update(new=formula))
+        self.assertEqual(self.catalog.snapshot('file-1')['config']['filenameByMode']['new'], formula)
+        formula['catalogId'] = 'person.unknown'
+        self.update_config(lambda config: config['filenameByMode'].update(new=formula))
+        self.assert_error('DEPENDENCY_UNAVAILABLE', lambda: self.catalog.snapshot('file-1'), 503)
+        formula['catalogId'] = 'person.name'
+        def invalid_seed(config):
+            config['filenameByMode']['new'] = formula
+            config['manual'] = {'fakerSeed': ''}
+        self.update_config(invalid_seed)
+        self.assert_error('DEPENDENCY_UNAVAILABLE', lambda: self.catalog.snapshot('file-1'), 503)
+
     def test_snapshot_uses_library_name_and_consistent_revision(self):
         before = hashlib.sha256(self.path.read_bytes()).digest()
         snapshot = self.catalog.snapshot('file-1')

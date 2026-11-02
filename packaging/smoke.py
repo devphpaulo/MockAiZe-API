@@ -174,6 +174,19 @@ def main():
             _, original = call('/api/v1/files/xml/file-1/new', payload, idempotency='content-frozen')
             _, repeated = call('/api/v1/files/xml/file-1/new', payload, idempotency='content-frozen', bearer=token)
             assert original == repeated
+            # Exercise each visible family and one retained legacy ID through the frozen worker.
+            from mockaize_api.faker_catalog import manifest as faker_manifest
+            catalogue = faker_manifest()
+            faker_ids = [category['items'][0]['id'] for category in catalogue['categories']]
+            faker_ids.append(next(item['id'] for item in catalogue['legacyItems'] if item['category'] == 'currency'))
+            field = json.dumps([{'ns': '', 'name': name, 'index': 1} for name in ('Document', 'Record', 'Value')])
+            for faker_id in faker_ids:
+                with closing(sqlite3.connect(root / 'source.sqlite3')) as db, db:
+                    config_data = json.loads(db.execute("SELECT config_json FROM variations WHERE id='file-1'").fetchone()[0])
+                    config_data['rulesByMode']['new'][field] = {'generator': {'type': 'faker', 'catalogVersion': 1, 'catalogId': faker_id}}
+                    db.execute("UPDATE variations SET config_json=? WHERE id='file-1'", (json.dumps(config_data),))
+                _, generated = call('/api/v1/files/xml/file-1/new', {'recordCount': 1, 'delivery': 'inline'})
+                assert ET.fromstring(generated).find('Record/Value').text is not None, faker_id
             assert after_startup.exists(), 'A escrita de logs/geracao nao deve iniciar outra limpeza.'
             print(json.dumps({'frozenSmoke': 'passed', 'newRecords': 1000,
                               'newDurationSeconds': round(elapsed, 3), 'apartFiles': 2, 'mixedRecords': 2,

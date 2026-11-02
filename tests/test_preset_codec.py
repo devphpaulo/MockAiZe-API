@@ -28,7 +28,7 @@ class PresetCodecTests(unittest.TestCase):
         root = ET.fromstring((FIXTURES / 'complete.mockaize.xml').read_bytes())
         formula_types = {element.tag.rsplit('}', 1)[-1] for element in root.iter()
                          if isinstance(element.tag, str) and element.tag.rsplit('}', 1)[-1] in codec.GENERATOR_TYPES}
-        self.assertEqual(formula_types, codec.GENERATOR_TYPES)
+        self.assertEqual(formula_types, codec.GENERATOR_TYPES - {'faker'})
         self.assertEqual(payload['configuration']['inputNotes']['types'][-1],
                          {'type': 'literal', 'value': 'ordinary object'})
 

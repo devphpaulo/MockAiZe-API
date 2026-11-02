@@ -1,7 +1,7 @@
 # Componentes de terceiros
 
 A distribuição Windows contém Python, SQLite da distribuição Python, pywin32,
-tzdata e o bootloader PyInstaller. Instalação, configuração e desinstalação usam
+tzdata, Faker 40.44.0 e o bootloader PyInstaller. Instalação, configuração e desinstalação usam
 Inno Setup. Qt/PySide e Shiboken foram retirados do produto.
 
 `packaging/collect_licenses.py` copia para `licenses/` os avisos e metadados
@@ -12,6 +12,7 @@ Este documento não escolhe uma licença para o código próprio do projeto.
 - Python: https://docs.python.org/3/license.html
 - SQLite: https://sqlite.org/copyright.html
 - pywin32: https://github.com/mhammond/pywin32
+- Faker: https://github.com/joke2k/faker
 - tzdata: https://github.com/python/tzdata
 - PyInstaller e exceção para distribuição: https://pyinstaller.org/en/stable/license.html
 - Inno Setup: https://jrsoftware.org/isinfo.php

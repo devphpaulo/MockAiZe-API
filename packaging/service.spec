@@ -1,14 +1,15 @@
 # Build from the repository root: pyinstaller --noconfirm packaging/service.spec
 from pathlib import Path
+from PyInstaller.utils.hooks import collect_submodules, copy_metadata
 root = Path(SPECPATH).parent
 a = Analysis([str(root / 'packaging' / 'service_entry.py')], pathex=[str(root / 'src')],
              datas=[(str(root / 'src/mockaize_api/assets/swagger'), 'mockaize_api/assets/swagger'),
-                    (str(root / 'src/mockaize_api/assets/mockaize.ico'), 'mockaize_api/assets')],
+                    (str(root / 'src/mockaize_api/assets/mockaize.ico'), 'mockaize_api/assets')] + copy_metadata('Faker'),
              hiddenimports=['win32timezone', 'servicemanager', 'win32serviceutil',
                             'win32service', 'win32event', 'pywintypes',
                             'mockaize_api.runtime', 'mockaize_api.xml_engine',
                             'mockaize_api.formulas', 'mockaize_api.maintenance',
-                            'win32com.client', 'pythoncom', '_sha2', '_sha1', '_md5', '_sha3', '_blake2'],
+                            'win32com.client', 'pythoncom', '_sha2', '_sha1', '_md5', '_sha3', '_blake2'] + collect_submodules('faker.providers'),
              # Supported API transport is HTTP. Built-in C hash modules provide
              # the same SHA-256/HMAC algorithms without bundling unused TLS/OpenSSL.
              # COM's optional Pythonwin type-library browser and archive codecs

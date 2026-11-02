@@ -1,0 +1,4363 @@
+{
+  "catalogVersion": 1,
+  "fakerVersion": "40.44.0",
+  "locale": "pt_BR",
+  "categories": [
+    {
+      "id": "person",
+      "label": "Pessoa fictícia",
+      "items": [
+        {
+          "id": "person.name",
+          "label": "Nome completo",
+          "method": "name",
+          "providerParameters": [],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": [
+            {
+              "name": "components",
+              "label": "Componentes",
+              "type": "multiselect",
+              "options": [
+                [
+                  "first_name",
+                  "Primeiro nome"
+                ],
+                [
+                  "last_name",
+                  "Sobrenome"
+                ]
+              ],
+              "default": [
+                "first_name",
+                "last_name"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "person.first_name",
+          "label": "Primeiro nome",
+          "method": "first_name",
+          "providerParameters": [],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": []
+        },
+        {
+          "id": "person.last_name",
+          "label": "Sobrenome",
+          "method": "last_name",
+          "providerParameters": [],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": []
+        }
+      ]
+    },
+    {
+      "id": "company",
+      "label": "Empresa fictícia",
+      "items": [
+        {
+          "id": "company.company",
+          "label": "Razão social",
+          "method": "company",
+          "providerParameters": [],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": []
+        },
+        {
+          "id": "company.trade_name",
+          "label": "Nome fantasia",
+          "method": "trade_name",
+          "providerParameters": [],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": []
+        },
+        {
+          "id": "company.company_id",
+          "label": "CNPJ",
+          "method": "company_id",
+          "providerParameters": [
+            {
+              "name": "use_alphanumeric",
+              "required": false,
+              "default": false,
+              "annotation": "<class 'bool'>"
+            }
+          ],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": [
+            {
+              "name": "mode",
+              "label": "Tipo de CNPJ",
+              "type": "select",
+              "options": [
+                [
+                  "N",
+                  "Numérico"
+                ],
+                [
+                  "A",
+                  "Alfanumérico"
+                ]
+              ],
+              "default": "N"
+            },
+            {
+              "name": "mask",
+              "label": "Máscara",
+              "type": "select",
+              "options": [
+                [
+                  "no",
+                  "Sem máscara"
+                ],
+                [
+                  "yes",
+                  "Com máscara"
+                ]
+              ],
+              "default": "no"
+            },
+            {
+              "name": "establishment",
+              "label": "Estabelecimento",
+              "type": "text",
+              "default": "0001"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "address",
+      "label": "Endereço fictício",
+      "items": [
+        {
+          "id": "address.address",
+          "label": "Endereço completo",
+          "method": "address",
+          "providerParameters": [],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": [
+            {
+              "name": "state",
+              "label": "UF do perfil",
+              "type": "select",
+              "default": "any",
+              "options": [
+                [
+                  "any",
+                  "Aleatória"
+                ],
+                [
+                  "AC",
+                  "AC · Acre"
+                ],
+                [
+                  "AL",
+                  "AL · Alagoas"
+                ],
+                [
+                  "AP",
+                  "AP · Amapá"
+                ],
+                [
+                  "AM",
+                  "AM · Amazonas"
+                ],
+                [
+                  "BA",
+                  "BA · Bahia"
+                ],
+                [
+                  "CE",
+                  "CE · Ceará"
+                ],
+                [
+                  "DF",
+                  "DF · Distrito Federal"
+                ],
+                [
+                  "ES",
+                  "ES · Espírito Santo"
+                ],
+                [
+                  "GO",
+                  "GO · Goiás"
+                ],
+                [
+                  "MA",
+                  "MA · Maranhão"
+                ],
+                [
+                  "MT",
+                  "MT · Mato Grosso"
+                ],
+                [
+                  "MS",
+                  "MS · Mato Grosso do Sul"
+                ],
+                [
+                  "MG",
+                  "MG · Minas Gerais"
+                ],
+                [
+                  "PA",
+                  "PA · Pará"
+                ],
+                [
+                  "PB",
+                  "PB · Paraíba"
+                ],
+                [
+                  "PR",
+                  "PR · Paraná"
+                ],
+                [
+                  "PE",
+                  "PE · Pernambuco"
+                ],
+                [
+                  "PI",
+                  "PI · Piauí"
+                ],
+                [
+                  "RJ",
+                  "RJ · Rio de Janeiro"
+                ],
+                [
+                  "RN",
+                  "RN · Rio Grande do Norte"
+                ],
+                [
+                  "RS",
+                  "RS · Rio Grande do Sul"
+                ],
+                [
+                  "RO",
+                  "RO · Rondônia"
+                ],
+                [
+                  "RR",
+                  "RR · Roraima"
+                ],
+                [
+                  "SC",
+                  "SC · Santa Catarina"
+                ],
+                [
+                  "SP",
+                  "SP · São Paulo"
+                ],
+                [
+                  "SE",
+                  "SE · Sergipe"
+                ],
+                [
+                  "TO",
+                  "TO · Tocantins"
+                ]
+              ]
+            },
+            {
+              "name": "components",
+              "label": "Componentes",
+              "type": "multiselect",
+              "options": [
+                [
+                  "street_name",
+                  "Logradouro"
+                ],
+                [
+                  "building_number",
+                  "Número"
+                ],
+                [
+                  "bairro",
+                  "Bairro"
+                ],
+                [
+                  "city",
+                  "Cidade"
+                ],
+                [
+                  "state_abbr",
+                  "UF"
+                ],
+                [
+                  "postcode",
+                  "CEP"
+                ],
+                [
+                  "country",
+                  "País"
+                ]
+              ],
+              "default": [
+                "street_name",
+                "building_number",
+                "bairro",
+                "city",
+                "state_abbr",
+                "postcode"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "address.street_address",
+          "label": "Logradouro e número",
+          "method": "street_address",
+          "providerParameters": [],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": [
+            {
+              "name": "state",
+              "label": "UF do perfil",
+              "type": "select",
+              "default": "any",
+              "options": [
+                [
+                  "any",
+                  "Aleatória"
+                ],
+                [
+                  "AC",
+                  "AC · Acre"
+                ],
+                [
+                  "AL",
+                  "AL · Alagoas"
+                ],
+                [
+                  "AP",
+                  "AP · Amapá"
+                ],
+                [
+                  "AM",
+                  "AM · Amazonas"
+                ],
+                [
+                  "BA",
+                  "BA · Bahia"
+                ],
+                [
+                  "CE",
+                  "CE · Ceará"
+                ],
+                [
+                  "DF",
+                  "DF · Distrito Federal"
+                ],
+                [
+                  "ES",
+                  "ES · Espírito Santo"
+                ],
+                [
+                  "GO",
+                  "GO · Goiás"
+                ],
+                [
+                  "MA",
+                  "MA · Maranhão"
+                ],
+                [
+                  "MT",
+                  "MT · Mato Grosso"
+                ],
+                [
+                  "MS",
+                  "MS · Mato Grosso do Sul"
+                ],
+                [
+                  "MG",
+                  "MG · Minas Gerais"
+                ],
+                [
+                  "PA",
+                  "PA · Pará"
+                ],
+                [
+                  "PB",
+                  "PB · Paraíba"
+                ],
+                [
+                  "PR",
+                  "PR · Paraná"
+                ],
+                [
+                  "PE",
+                  "PE · Pernambuco"
+                ],
+                [
+                  "PI",
+                  "PI · Piauí"
+                ],
+                [
+                  "RJ",
+                  "RJ · Rio de Janeiro"
+                ],
+                [
+                  "RN",
+                  "RN · Rio Grande do Norte"
+                ],
+                [
+                  "RS",
+                  "RS · Rio Grande do Sul"
+                ],
+                [
+                  "RO",
+                  "RO · Rondônia"
+                ],
+                [
+                  "RR",
+                  "RR · Roraima"
+                ],
+                [
+                  "SC",
+                  "SC · Santa Catarina"
+                ],
+                [
+                  "SP",
+                  "SP · São Paulo"
+                ],
+                [
+                  "SE",
+                  "SE · Sergipe"
+                ],
+                [
+                  "TO",
+                  "TO · Tocantins"
+                ]
+              ]
+            },
+            {
+              "name": "components",
+              "label": "Componentes",
+              "type": "multiselect",
+              "options": [
+                [
+                  "street_name",
+                  "Logradouro"
+                ],
+                [
+                  "building_number",
+                  "Número"
+                ],
+                [
+                  "bairro",
+                  "Bairro"
+                ],
+                [
+                  "city",
+                  "Cidade"
+                ],
+                [
+                  "state_abbr",
+                  "UF"
+                ],
+                [
+                  "postcode",
+                  "CEP"
+                ],
+                [
+                  "country",
+                  "País"
+                ]
+              ],
+              "default": [
+                "street_name",
+                "building_number"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "address.street_name",
+          "label": "Logradouro",
+          "method": "street_name",
+          "providerParameters": [],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": [
+            {
+              "name": "state",
+              "label": "UF do perfil",
+              "type": "select",
+              "default": "any",
+              "options": [
+                [
+                  "any",
+                  "Aleatória"
+                ],
+                [
+                  "AC",
+                  "AC · Acre"
+                ],
+                [
+                  "AL",
+                  "AL · Alagoas"
+                ],
+                [
+                  "AP",
+                  "AP · Amapá"
+                ],
+                [
+                  "AM",
+                  "AM · Amazonas"
+                ],
+                [
+                  "BA",
+                  "BA · Bahia"
+                ],
+                [
+                  "CE",
+                  "CE · Ceará"
+                ],
+                [
+                  "DF",
+                  "DF · Distrito Federal"
+                ],
+                [
+                  "ES",
+                  "ES · Espírito Santo"
+                ],
+                [
+                  "GO",
+                  "GO · Goiás"
+                ],
+                [
+                  "MA",
+                  "MA · Maranhão"
+                ],
+                [
+                  "MT",
+                  "MT · Mato Grosso"
+                ],
+                [
+                  "MS",
+                  "MS · Mato Grosso do Sul"
+                ],
+                [
+                  "MG",
+                  "MG · Minas Gerais"
+                ],
+                [
+                  "PA",
+                  "PA · Pará"
+                ],
+                [
+                  "PB",
+                  "PB · Paraíba"
+                ],
+                [
+                  "PR",
+                  "PR · Paraná"
+                ],
+                [
+                  "PE",
+                  "PE · Pernambuco"
+                ],
+                [
+                  "PI",
+                  "PI · Piauí"
+                ],
+                [
+                  "RJ",
+                  "RJ · Rio de Janeiro"
+                ],
+                [
+                  "RN",
+                  "RN · Rio Grande do Norte"
+                ],
+                [
+                  "RS",
+                  "RS · Rio Grande do Sul"
+                ],
+                [
+                  "RO",
+                  "RO · Rondônia"
+                ],
+                [
+                  "RR",
+                  "RR · Roraima"
+                ],
+                [
+                  "SC",
+                  "SC · Santa Catarina"
+                ],
+                [
+                  "SP",
+                  "SP · São Paulo"
+                ],
+                [
+                  "SE",
+                  "SE · Sergipe"
+                ],
+                [
+                  "TO",
+                  "TO · Tocantins"
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "id": "address.street_prefix",
+          "label": "Tipo de logradouro",
+          "method": "street_prefix",
+          "providerParameters": [],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": [
+            {
+              "name": "state",
+              "label": "UF do perfil",
+              "type": "select",
+              "default": "any",
+              "options": [
+                [
+                  "any",
+                  "Aleatória"
+                ],
+                [
+                  "AC",
+                  "AC · Acre"
+                ],
+                [
+                  "AL",
+                  "AL · Alagoas"
+                ],
+                [
+                  "AP",
+                  "AP · Amapá"
+                ],
+                [
+                  "AM",
+                  "AM · Amazonas"
+                ],
+                [
+                  "BA",
+                  "BA · Bahia"
+                ],
+                [
+                  "CE",
+                  "CE · Ceará"
+                ],
+                [
+                  "DF",
+                  "DF · Distrito Federal"
+                ],
+                [
+                  "ES",
+                  "ES · Espírito Santo"
+                ],
+                [
+                  "GO",
+                  "GO · Goiás"
+                ],
+                [
+                  "MA",
+                  "MA · Maranhão"
+                ],
+                [
+                  "MT",
+                  "MT · Mato Grosso"
+                ],
+                [
+                  "MS",
+                  "MS · Mato Grosso do Sul"
+                ],
+                [
+                  "MG",
+                  "MG · Minas Gerais"
+                ],
+                [
+                  "PA",
+                  "PA · Pará"
+                ],
+                [
+                  "PB",
+                  "PB · Paraíba"
+                ],
+                [
+                  "PR",
+                  "PR · Paraná"
+                ],
+                [
+                  "PE",
+                  "PE · Pernambuco"
+                ],
+                [
+                  "PI",
+                  "PI · Piauí"
+                ],
+                [
+                  "RJ",
+                  "RJ · Rio de Janeiro"
+                ],
+                [
+                  "RN",
+                  "RN · Rio Grande do Norte"
+                ],
+                [
+                  "RS",
+                  "RS · Rio Grande do Sul"
+                ],
+                [
+                  "RO",
+                  "RO · Rondônia"
+                ],
+                [
+                  "RR",
+                  "RR · Roraima"
+                ],
+                [
+                  "SC",
+                  "SC · Santa Catarina"
+                ],
+                [
+                  "SP",
+                  "SP · São Paulo"
+                ],
+                [
+                  "SE",
+                  "SE · Sergipe"
+                ],
+                [
+                  "TO",
+                  "TO · Tocantins"
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "id": "address.neighborhood",
+          "label": "Bairro",
+          "method": "neighborhood",
+          "providerParameters": [],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": [
+            {
+              "name": "state",
+              "label": "UF do perfil",
+              "type": "select",
+              "default": "any",
+              "options": [
+                [
+                  "any",
+                  "Aleatória"
+                ],
+                [
+                  "AC",
+                  "AC · Acre"
+                ],
+                [
+                  "AL",
+                  "AL · Alagoas"
+                ],
+                [
+                  "AP",
+                  "AP · Amapá"
+                ],
+                [
+                  "AM",
+                  "AM · Amazonas"
+                ],
+                [
+                  "BA",
+                  "BA · Bahia"
+                ],
+                [
+                  "CE",
+                  "CE · Ceará"
+                ],
+                [
+                  "DF",
+                  "DF · Distrito Federal"
+                ],
+                [
+                  "ES",
+                  "ES · Espírito Santo"
+                ],
+                [
+                  "GO",
+                  "GO · Goiás"
+                ],
+                [
+                  "MA",
+                  "MA · Maranhão"
+                ],
+                [
+                  "MT",
+                  "MT · Mato Grosso"
+                ],
+                [
+                  "MS",
+                  "MS · Mato Grosso do Sul"
+                ],
+                [
+                  "MG",
+                  "MG · Minas Gerais"
+                ],
+                [
+                  "PA",
+                  "PA · Pará"
+                ],
+                [
+                  "PB",
+                  "PB · Paraíba"
+                ],
+                [
+                  "PR",
+                  "PR · Paraná"
+                ],
+                [
+                  "PE",
+                  "PE · Pernambuco"
+                ],
+                [
+                  "PI",
+                  "PI · Piauí"
+                ],
+                [
+                  "RJ",
+                  "RJ · Rio de Janeiro"
+                ],
+                [
+                  "RN",
+                  "RN · Rio Grande do Norte"
+                ],
+                [
+                  "RS",
+                  "RS · Rio Grande do Sul"
+                ],
+                [
+                  "RO",
+                  "RO · Rondônia"
+                ],
+                [
+                  "RR",
+                  "RR · Roraima"
+                ],
+                [
+                  "SC",
+                  "SC · Santa Catarina"
+                ],
+                [
+                  "SP",
+                  "SP · São Paulo"
+                ],
+                [
+                  "SE",
+                  "SE · Sergipe"
+                ],
+                [
+                  "TO",
+                  "TO · Tocantins"
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "id": "address.street_suffix",
+          "label": "Complemento do logradouro",
+          "method": "street_suffix",
+          "providerParameters": [],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": [
+            {
+              "name": "state",
+              "label": "UF do perfil",
+              "type": "select",
+              "default": "any",
+              "options": [
+                [
+                  "any",
+                  "Aleatória"
+                ],
+                [
+                  "AC",
+                  "AC · Acre"
+                ],
+                [
+                  "AL",
+                  "AL · Alagoas"
+                ],
+                [
+                  "AP",
+                  "AP · Amapá"
+                ],
+                [
+                  "AM",
+                  "AM · Amazonas"
+                ],
+                [
+                  "BA",
+                  "BA · Bahia"
+                ],
+                [
+                  "CE",
+                  "CE · Ceará"
+                ],
+                [
+                  "DF",
+                  "DF · Distrito Federal"
+                ],
+                [
+                  "ES",
+                  "ES · Espírito Santo"
+                ],
+                [
+                  "GO",
+                  "GO · Goiás"
+                ],
+                [
+                  "MA",
+                  "MA · Maranhão"
+                ],
+                [
+                  "MT",
+                  "MT · Mato Grosso"
+                ],
+                [
+                  "MS",
+                  "MS · Mato Grosso do Sul"
+                ],
+                [
+                  "MG",
+                  "MG · Minas Gerais"
+                ],
+                [
+                  "PA",
+                  "PA · Pará"
+                ],
+                [
+                  "PB",
+                  "PB · Paraíba"
+                ],
+                [
+                  "PR",
+                  "PR · Paraná"
+                ],
+                [
+                  "PE",
+                  "PE · Pernambuco"
+                ],
+                [
+                  "PI",
+                  "PI · Piauí"
+                ],
+                [
+                  "RJ",
+                  "RJ · Rio de Janeiro"
+                ],
+                [
+                  "RN",
+                  "RN · Rio Grande do Norte"
+                ],
+                [
+                  "RS",
+                  "RS · Rio Grande do Sul"
+                ],
+                [
+                  "RO",
+                  "RO · Rondônia"
+                ],
+                [
+                  "RR",
+                  "RR · Roraima"
+                ],
+                [
+                  "SC",
+                  "SC · Santa Catarina"
+                ],
+                [
+                  "SP",
+                  "SP · São Paulo"
+                ],
+                [
+                  "SE",
+                  "SE · Sergipe"
+                ],
+                [
+                  "TO",
+                  "TO · Tocantins"
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "id": "address.building_number",
+          "label": "Número",
+          "method": "building_number",
+          "providerParameters": [],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": [
+            {
+              "name": "state",
+              "label": "UF do perfil",
+              "type": "select",
+              "default": "any",
+              "options": [
+                [
+                  "any",
+                  "Aleatória"
+                ],
+                [
+                  "AC",
+                  "AC · Acre"
+                ],
+                [
+                  "AL",
+                  "AL · Alagoas"
+                ],
+                [
+                  "AP",
+                  "AP · Amapá"
+                ],
+                [
+                  "AM",
+                  "AM · Amazonas"
+                ],
+                [
+                  "BA",
+                  "BA · Bahia"
+                ],
+                [
+                  "CE",
+                  "CE · Ceará"
+                ],
+                [
+                  "DF",
+                  "DF · Distrito Federal"
+                ],
+                [
+                  "ES",
+                  "ES · Espírito Santo"
+                ],
+                [
+                  "GO",
+                  "GO · Goiás"
+                ],
+                [
+                  "MA",
+                  "MA · Maranhão"
+                ],
+                [
+                  "MT",
+                  "MT · Mato Grosso"
+                ],
+                [
+                  "MS",
+                  "MS · Mato Grosso do Sul"
+                ],
+                [
+                  "MG",
+                  "MG · Minas Gerais"
+                ],
+                [
+                  "PA",
+                  "PA · Pará"
+                ],
+                [
+                  "PB",
+                  "PB · Paraíba"
+                ],
+                [
+                  "PR",
+                  "PR · Paraná"
+                ],
+                [
+                  "PE",
+                  "PE · Pernambuco"
+                ],
+                [
+                  "PI",
+                  "PI · Piauí"
+                ],
+                [
+                  "RJ",
+                  "RJ · Rio de Janeiro"
+                ],
+                [
+                  "RN",
+                  "RN · Rio Grande do Norte"
+                ],
+                [
+                  "RS",
+                  "RS · Rio Grande do Sul"
+                ],
+                [
+                  "RO",
+                  "RO · Rondônia"
+                ],
+                [
+                  "RR",
+                  "RR · Roraima"
+                ],
+                [
+                  "SC",
+                  "SC · Santa Catarina"
+                ],
+                [
+                  "SP",
+                  "SP · São Paulo"
+                ],
+                [
+                  "SE",
+                  "SE · Sergipe"
+                ],
+                [
+                  "TO",
+                  "TO · Tocantins"
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "id": "address.bairro",
+          "label": "Bairro",
+          "method": "bairro",
+          "providerParameters": [],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": [
+            {
+              "name": "state",
+              "label": "UF do perfil",
+              "type": "select",
+              "default": "any",
+              "options": [
+                [
+                  "any",
+                  "Aleatória"
+                ],
+                [
+                  "AC",
+                  "AC · Acre"
+                ],
+                [
+                  "AL",
+                  "AL · Alagoas"
+                ],
+                [
+                  "AP",
+                  "AP · Amapá"
+                ],
+                [
+                  "AM",
+                  "AM · Amazonas"
+                ],
+                [
+                  "BA",
+                  "BA · Bahia"
+                ],
+                [
+                  "CE",
+                  "CE · Ceará"
+                ],
+                [
+                  "DF",
+                  "DF · Distrito Federal"
+                ],
+                [
+                  "ES",
+                  "ES · Espírito Santo"
+                ],
+                [
+                  "GO",
+                  "GO · Goiás"
+                ],
+                [
+                  "MA",
+                  "MA · Maranhão"
+                ],
+                [
+                  "MT",
+                  "MT · Mato Grosso"
+                ],
+                [
+                  "MS",
+                  "MS · Mato Grosso do Sul"
+                ],
+                [
+                  "MG",
+                  "MG · Minas Gerais"
+                ],
+                [
+                  "PA",
+                  "PA · Pará"
+                ],
+                [
+                  "PB",
+                  "PB · Paraíba"
+                ],
+                [
+                  "PR",
+                  "PR · Paraná"
+                ],
+                [
+                  "PE",
+                  "PE · Pernambuco"
+                ],
+                [
+                  "PI",
+                  "PI · Piauí"
+                ],
+                [
+                  "RJ",
+                  "RJ · Rio de Janeiro"
+                ],
+                [
+                  "RN",
+                  "RN · Rio Grande do Norte"
+                ],
+                [
+                  "RS",
+                  "RS · Rio Grande do Sul"
+                ],
+                [
+                  "RO",
+                  "RO · Rondônia"
+                ],
+                [
+                  "RR",
+                  "RR · Roraima"
+                ],
+                [
+                  "SC",
+                  "SC · Santa Catarina"
+                ],
+                [
+                  "SP",
+                  "SP · São Paulo"
+                ],
+                [
+                  "SE",
+                  "SE · Sergipe"
+                ],
+                [
+                  "TO",
+                  "TO · Tocantins"
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "id": "address.city",
+          "label": "Cidade",
+          "method": "city",
+          "providerParameters": [],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": [
+            {
+              "name": "state",
+              "label": "UF do perfil",
+              "type": "select",
+              "default": "any",
+              "options": [
+                [
+                  "any",
+                  "Aleatória"
+                ],
+                [
+                  "AC",
+                  "AC · Acre"
+                ],
+                [
+                  "AL",
+                  "AL · Alagoas"
+                ],
+                [
+                  "AP",
+                  "AP · Amapá"
+                ],
+                [
+                  "AM",
+                  "AM · Amazonas"
+                ],
+                [
+                  "BA",
+                  "BA · Bahia"
+                ],
+                [
+                  "CE",
+                  "CE · Ceará"
+                ],
+                [
+                  "DF",
+                  "DF · Distrito Federal"
+                ],
+                [
+                  "ES",
+                  "ES · Espírito Santo"
+                ],
+                [
+                  "GO",
+                  "GO · Goiás"
+                ],
+                [
+                  "MA",
+                  "MA · Maranhão"
+                ],
+                [
+                  "MT",
+                  "MT · Mato Grosso"
+                ],
+                [
+                  "MS",
+                  "MS · Mato Grosso do Sul"
+                ],
+                [
+                  "MG",
+                  "MG · Minas Gerais"
+                ],
+                [
+                  "PA",
+                  "PA · Pará"
+                ],
+                [
+                  "PB",
+                  "PB · Paraíba"
+                ],
+                [
+                  "PR",
+                  "PR · Paraná"
+                ],
+                [
+                  "PE",
+                  "PE · Pernambuco"
+                ],
+                [
+                  "PI",
+                  "PI · Piauí"
+                ],
+                [
+                  "RJ",
+                  "RJ · Rio de Janeiro"
+                ],
+                [
+                  "RN",
+                  "RN · Rio Grande do Norte"
+                ],
+                [
+                  "RS",
+                  "RS · Rio Grande do Sul"
+                ],
+                [
+                  "RO",
+                  "RO · Rondônia"
+                ],
+                [
+                  "RR",
+                  "RR · Roraima"
+                ],
+                [
+                  "SC",
+                  "SC · Santa Catarina"
+                ],
+                [
+                  "SP",
+                  "SP · São Paulo"
+                ],
+                [
+                  "SE",
+                  "SE · Sergipe"
+                ],
+                [
+                  "TO",
+                  "TO · Tocantins"
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "id": "address.city_suffix",
+          "label": "Sufixo da cidade",
+          "method": "city_suffix",
+          "providerParameters": [],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": [
+            {
+              "name": "state",
+              "label": "UF do perfil",
+              "type": "select",
+              "default": "any",
+              "options": [
+                [
+                  "any",
+                  "Aleatória"
+                ],
+                [
+                  "AC",
+                  "AC · Acre"
+                ],
+                [
+                  "AL",
+                  "AL · Alagoas"
+                ],
+                [
+                  "AP",
+                  "AP · Amapá"
+                ],
+                [
+                  "AM",
+                  "AM · Amazonas"
+                ],
+                [
+                  "BA",
+                  "BA · Bahia"
+                ],
+                [
+                  "CE",
+                  "CE · Ceará"
+                ],
+                [
+                  "DF",
+                  "DF · Distrito Federal"
+                ],
+                [
+                  "ES",
+                  "ES · Espírito Santo"
+                ],
+                [
+                  "GO",
+                  "GO · Goiás"
+                ],
+                [
+                  "MA",
+                  "MA · Maranhão"
+                ],
+                [
+                  "MT",
+                  "MT · Mato Grosso"
+                ],
+                [
+                  "MS",
+                  "MS · Mato Grosso do Sul"
+                ],
+                [
+                  "MG",
+                  "MG · Minas Gerais"
+                ],
+                [
+                  "PA",
+                  "PA · Pará"
+                ],
+                [
+                  "PB",
+                  "PB · Paraíba"
+                ],
+                [
+                  "PR",
+                  "PR · Paraná"
+                ],
+                [
+                  "PE",
+                  "PE · Pernambuco"
+                ],
+                [
+                  "PI",
+                  "PI · Piauí"
+                ],
+                [
+                  "RJ",
+                  "RJ · Rio de Janeiro"
+                ],
+                [
+                  "RN",
+                  "RN · Rio Grande do Norte"
+                ],
+                [
+                  "RS",
+                  "RS · Rio Grande do Sul"
+                ],
+                [
+                  "RO",
+                  "RO · Rondônia"
+                ],
+                [
+                  "RR",
+                  "RR · Roraima"
+                ],
+                [
+                  "SC",
+                  "SC · Santa Catarina"
+                ],
+                [
+                  "SP",
+                  "SP · São Paulo"
+                ],
+                [
+                  "SE",
+                  "SE · Sergipe"
+                ],
+                [
+                  "TO",
+                  "TO · Tocantins"
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "id": "address.estado",
+          "label": "Estado",
+          "method": "estado",
+          "providerParameters": [],
+          "returnAnnotation": "typing.Tuple[str, str]",
+          "parameters": [
+            {
+              "name": "state",
+              "label": "UF do perfil",
+              "type": "select",
+              "default": "any",
+              "options": [
+                [
+                  "any",
+                  "Aleatória"
+                ],
+                [
+                  "AC",
+                  "AC · Acre"
+                ],
+                [
+                  "AL",
+                  "AL · Alagoas"
+                ],
+                [
+                  "AP",
+                  "AP · Amapá"
+                ],
+                [
+                  "AM",
+                  "AM · Amazonas"
+                ],
+                [
+                  "BA",
+                  "BA · Bahia"
+                ],
+                [
+                  "CE",
+                  "CE · Ceará"
+                ],
+                [
+                  "DF",
+                  "DF · Distrito Federal"
+                ],
+                [
+                  "ES",
+                  "ES · Espírito Santo"
+                ],
+                [
+                  "GO",
+                  "GO · Goiás"
+                ],
+                [
+                  "MA",
+                  "MA · Maranhão"
+                ],
+                [
+                  "MT",
+                  "MT · Mato Grosso"
+                ],
+                [
+                  "MS",
+                  "MS · Mato Grosso do Sul"
+                ],
+                [
+                  "MG",
+                  "MG · Minas Gerais"
+                ],
+                [
+                  "PA",
+                  "PA · Pará"
+                ],
+                [
+                  "PB",
+                  "PB · Paraíba"
+                ],
+                [
+                  "PR",
+                  "PR · Paraná"
+                ],
+                [
+                  "PE",
+                  "PE · Pernambuco"
+                ],
+                [
+                  "PI",
+                  "PI · Piauí"
+                ],
+                [
+                  "RJ",
+                  "RJ · Rio de Janeiro"
+                ],
+                [
+                  "RN",
+                  "RN · Rio Grande do Norte"
+                ],
+                [
+                  "RS",
+                  "RS · Rio Grande do Sul"
+                ],
+                [
+                  "RO",
+                  "RO · Rondônia"
+                ],
+                [
+                  "RR",
+                  "RR · Roraima"
+                ],
+                [
+                  "SC",
+                  "SC · Santa Catarina"
+                ],
+                [
+                  "SP",
+                  "SP · São Paulo"
+                ],
+                [
+                  "SE",
+                  "SE · Sergipe"
+                ],
+                [
+                  "TO",
+                  "TO · Tocantins"
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "id": "address.estado_nome",
+          "label": "Nome do estado",
+          "method": "estado_nome",
+          "providerParameters": [],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": [
+            {
+              "name": "state",
+              "label": "UF do perfil",
+              "type": "select",
+              "default": "any",
+              "options": [
+                [
+                  "any",
+                  "Aleatória"
+                ],
+                [
+                  "AC",
+                  "AC · Acre"
+                ],
+                [
+                  "AL",
+                  "AL · Alagoas"
+                ],
+                [
+                  "AP",
+                  "AP · Amapá"
+                ],
+                [
+                  "AM",
+                  "AM · Amazonas"
+                ],
+                [
+                  "BA",
+                  "BA · Bahia"
+                ],
+                [
+                  "CE",
+                  "CE · Ceará"
+                ],
+                [
+                  "DF",
+                  "DF · Distrito Federal"
+                ],
+                [
+                  "ES",
+                  "ES · Espírito Santo"
+                ],
+                [
+                  "GO",
+                  "GO · Goiás"
+                ],
+                [
+                  "MA",
+                  "MA · Maranhão"
+                ],
+                [
+                  "MT",
+                  "MT · Mato Grosso"
+                ],
+                [
+                  "MS",
+                  "MS · Mato Grosso do Sul"
+                ],
+                [
+                  "MG",
+                  "MG · Minas Gerais"
+                ],
+                [
+                  "PA",
+                  "PA · Pará"
+                ],
+                [
+                  "PB",
+                  "PB · Paraíba"
+                ],
+                [
+                  "PR",
+                  "PR · Paraná"
+                ],
+                [
+                  "PE",
+                  "PE · Pernambuco"
+                ],
+                [
+                  "PI",
+                  "PI · Piauí"
+                ],
+                [
+                  "RJ",
+                  "RJ · Rio de Janeiro"
+                ],
+                [
+                  "RN",
+                  "RN · Rio Grande do Norte"
+                ],
+                [
+                  "RS",
+                  "RS · Rio Grande do Sul"
+                ],
+                [
+                  "RO",
+                  "RO · Rondônia"
+                ],
+                [
+                  "RR",
+                  "RR · Roraima"
+                ],
+                [
+                  "SC",
+                  "SC · Santa Catarina"
+                ],
+                [
+                  "SP",
+                  "SP · São Paulo"
+                ],
+                [
+                  "SE",
+                  "SE · Sergipe"
+                ],
+                [
+                  "TO",
+                  "TO · Tocantins"
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "id": "address.estado_sigla",
+          "label": "Sigla do estado",
+          "method": "estado_sigla",
+          "providerParameters": [],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": [
+            {
+              "name": "state",
+              "label": "UF do perfil",
+              "type": "select",
+              "default": "any",
+              "options": [
+                [
+                  "any",
+                  "Aleatória"
+                ],
+                [
+                  "AC",
+                  "AC · Acre"
+                ],
+                [
+                  "AL",
+                  "AL · Alagoas"
+                ],
+                [
+                  "AP",
+                  "AP · Amapá"
+                ],
+                [
+                  "AM",
+                  "AM · Amazonas"
+                ],
+                [
+                  "BA",
+                  "BA · Bahia"
+                ],
+                [
+                  "CE",
+                  "CE · Ceará"
+                ],
+                [
+                  "DF",
+                  "DF · Distrito Federal"
+                ],
+                [
+                  "ES",
+                  "ES · Espírito Santo"
+                ],
+                [
+                  "GO",
+                  "GO · Goiás"
+                ],
+                [
+                  "MA",
+                  "MA · Maranhão"
+                ],
+                [
+                  "MT",
+                  "MT · Mato Grosso"
+                ],
+                [
+                  "MS",
+                  "MS · Mato Grosso do Sul"
+                ],
+                [
+                  "MG",
+                  "MG · Minas Gerais"
+                ],
+                [
+                  "PA",
+                  "PA · Pará"
+                ],
+                [
+                  "PB",
+                  "PB · Paraíba"
+                ],
+                [
+                  "PR",
+                  "PR · Paraná"
+                ],
+                [
+                  "PE",
+                  "PE · Pernambuco"
+                ],
+                [
+                  "PI",
+                  "PI · Piauí"
+                ],
+                [
+                  "RJ",
+                  "RJ · Rio de Janeiro"
+                ],
+                [
+                  "RN",
+                  "RN · Rio Grande do Norte"
+                ],
+                [
+                  "RS",
+                  "RS · Rio Grande do Sul"
+                ],
+                [
+                  "RO",
+                  "RO · Rondônia"
+                ],
+                [
+                  "RR",
+                  "RR · Roraima"
+                ],
+                [
+                  "SC",
+                  "SC · Santa Catarina"
+                ],
+                [
+                  "SP",
+                  "SP · São Paulo"
+                ],
+                [
+                  "SE",
+                  "SE · Sergipe"
+                ],
+                [
+                  "TO",
+                  "TO · Tocantins"
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "id": "address.state",
+          "label": "Estado",
+          "method": "state",
+          "providerParameters": [],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": [
+            {
+              "name": "state",
+              "label": "UF do perfil",
+              "type": "select",
+              "default": "any",
+              "options": [
+                [
+                  "any",
+                  "Aleatória"
+                ],
+                [
+                  "AC",
+                  "AC · Acre"
+                ],
+                [
+                  "AL",
+                  "AL · Alagoas"
+                ],
+                [
+                  "AP",
+                  "AP · Amapá"
+                ],
+                [
+                  "AM",
+                  "AM · Amazonas"
+                ],
+                [
+                  "BA",
+                  "BA · Bahia"
+                ],
+                [
+                  "CE",
+                  "CE · Ceará"
+                ],
+                [
+                  "DF",
+                  "DF · Distrito Federal"
+                ],
+                [
+                  "ES",
+                  "ES · Espírito Santo"
+                ],
+                [
+                  "GO",
+                  "GO · Goiás"
+                ],
+                [
+                  "MA",
+                  "MA · Maranhão"
+                ],
+                [
+                  "MT",
+                  "MT · Mato Grosso"
+                ],
+                [
+                  "MS",
+                  "MS · Mato Grosso do Sul"
+                ],
+                [
+                  "MG",
+                  "MG · Minas Gerais"
+                ],
+                [
+                  "PA",
+                  "PA · Pará"
+                ],
+                [
+                  "PB",
+                  "PB · Paraíba"
+                ],
+                [
+                  "PR",
+                  "PR · Paraná"
+                ],
+                [
+                  "PE",
+                  "PE · Pernambuco"
+                ],
+                [
+                  "PI",
+                  "PI · Piauí"
+                ],
+                [
+                  "RJ",
+                  "RJ · Rio de Janeiro"
+                ],
+                [
+                  "RN",
+                  "RN · Rio Grande do Norte"
+                ],
+                [
+                  "RS",
+                  "RS · Rio Grande do Sul"
+                ],
+                [
+                  "RO",
+                  "RO · Rondônia"
+                ],
+                [
+                  "RR",
+                  "RR · Roraima"
+                ],
+                [
+                  "SC",
+                  "SC · Santa Catarina"
+                ],
+                [
+                  "SP",
+                  "SP · São Paulo"
+                ],
+                [
+                  "SE",
+                  "SE · Sergipe"
+                ],
+                [
+                  "TO",
+                  "TO · Tocantins"
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "id": "address.state_abbr",
+          "label": "Sigla do estado",
+          "method": "state_abbr",
+          "providerParameters": [],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": [
+            {
+              "name": "state",
+              "label": "UF do perfil",
+              "type": "select",
+              "default": "any",
+              "options": [
+                [
+                  "any",
+                  "Aleatória"
+                ],
+                [
+                  "AC",
+                  "AC · Acre"
+                ],
+                [
+                  "AL",
+                  "AL · Alagoas"
+                ],
+                [
+                  "AP",
+                  "AP · Amapá"
+                ],
+                [
+                  "AM",
+                  "AM · Amazonas"
+                ],
+                [
+                  "BA",
+                  "BA · Bahia"
+                ],
+                [
+                  "CE",
+                  "CE · Ceará"
+                ],
+                [
+                  "DF",
+                  "DF · Distrito Federal"
+                ],
+                [
+                  "ES",
+                  "ES · Espírito Santo"
+                ],
+                [
+                  "GO",
+                  "GO · Goiás"
+                ],
+                [
+                  "MA",
+                  "MA · Maranhão"
+                ],
+                [
+                  "MT",
+                  "MT · Mato Grosso"
+                ],
+                [
+                  "MS",
+                  "MS · Mato Grosso do Sul"
+                ],
+                [
+                  "MG",
+                  "MG · Minas Gerais"
+                ],
+                [
+                  "PA",
+                  "PA · Pará"
+                ],
+                [
+                  "PB",
+                  "PB · Paraíba"
+                ],
+                [
+                  "PR",
+                  "PR · Paraná"
+                ],
+                [
+                  "PE",
+                  "PE · Pernambuco"
+                ],
+                [
+                  "PI",
+                  "PI · Piauí"
+                ],
+                [
+                  "RJ",
+                  "RJ · Rio de Janeiro"
+                ],
+                [
+                  "RN",
+                  "RN · Rio Grande do Norte"
+                ],
+                [
+                  "RS",
+                  "RS · Rio Grande do Sul"
+                ],
+                [
+                  "RO",
+                  "RO · Rondônia"
+                ],
+                [
+                  "RR",
+                  "RR · Roraima"
+                ],
+                [
+                  "SC",
+                  "SC · Santa Catarina"
+                ],
+                [
+                  "SP",
+                  "SP · São Paulo"
+                ],
+                [
+                  "SE",
+                  "SE · Sergipe"
+                ],
+                [
+                  "TO",
+                  "TO · Tocantins"
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "id": "address.administrative_unit",
+          "label": "Unidade administrativa",
+          "method": "administrative_unit",
+          "providerParameters": [],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": [
+            {
+              "name": "state",
+              "label": "UF do perfil",
+              "type": "select",
+              "default": "any",
+              "options": [
+                [
+                  "any",
+                  "Aleatória"
+                ],
+                [
+                  "AC",
+                  "AC · Acre"
+                ],
+                [
+                  "AL",
+                  "AL · Alagoas"
+                ],
+                [
+                  "AP",
+                  "AP · Amapá"
+                ],
+                [
+                  "AM",
+                  "AM · Amazonas"
+                ],
+                [
+                  "BA",
+                  "BA · Bahia"
+                ],
+                [
+                  "CE",
+                  "CE · Ceará"
+                ],
+                [
+                  "DF",
+                  "DF · Distrito Federal"
+                ],
+                [
+                  "ES",
+                  "ES · Espírito Santo"
+                ],
+                [
+                  "GO",
+                  "GO · Goiás"
+                ],
+                [
+                  "MA",
+                  "MA · Maranhão"
+                ],
+                [
+                  "MT",
+                  "MT · Mato Grosso"
+                ],
+                [
+                  "MS",
+                  "MS · Mato Grosso do Sul"
+                ],
+                [
+                  "MG",
+                  "MG · Minas Gerais"
+                ],
+                [
+                  "PA",
+                  "PA · Pará"
+                ],
+                [
+                  "PB",
+                  "PB · Paraíba"
+                ],
+                [
+                  "PR",
+                  "PR · Paraná"
+                ],
+                [
+                  "PE",
+                  "PE · Pernambuco"
+                ],
+                [
+                  "PI",
+                  "PI · Piauí"
+                ],
+                [
+                  "RJ",
+                  "RJ · Rio de Janeiro"
+                ],
+                [
+                  "RN",
+                  "RN · Rio Grande do Norte"
+                ],
+                [
+                  "RS",
+                  "RS · Rio Grande do Sul"
+                ],
+                [
+                  "RO",
+                  "RO · Rondônia"
+                ],
+                [
+                  "RR",
+                  "RR · Roraima"
+                ],
+                [
+                  "SC",
+                  "SC · Santa Catarina"
+                ],
+                [
+                  "SP",
+                  "SP · São Paulo"
+                ],
+                [
+                  "SE",
+                  "SE · Sergipe"
+                ],
+                [
+                  "TO",
+                  "TO · Tocantins"
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "id": "address.postcode",
+          "label": "CEP",
+          "method": "postcode",
+          "providerParameters": [
+            {
+              "name": "formatted",
+              "required": false,
+              "default": true,
+              "annotation": "<class 'bool'>"
+            }
+          ],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": [
+            {
+              "name": "state",
+              "label": "UF do perfil",
+              "type": "select",
+              "default": "any",
+              "options": [
+                [
+                  "any",
+                  "Aleatória"
+                ],
+                [
+                  "AC",
+                  "AC · Acre"
+                ],
+                [
+                  "AL",
+                  "AL · Alagoas"
+                ],
+                [
+                  "AP",
+                  "AP · Amapá"
+                ],
+                [
+                  "AM",
+                  "AM · Amazonas"
+                ],
+                [
+                  "BA",
+                  "BA · Bahia"
+                ],
+                [
+                  "CE",
+                  "CE · Ceará"
+                ],
+                [
+                  "DF",
+                  "DF · Distrito Federal"
+                ],
+                [
+                  "ES",
+                  "ES · Espírito Santo"
+                ],
+                [
+                  "GO",
+                  "GO · Goiás"
+                ],
+                [
+                  "MA",
+                  "MA · Maranhão"
+                ],
+                [
+                  "MT",
+                  "MT · Mato Grosso"
+                ],
+                [
+                  "MS",
+                  "MS · Mato Grosso do Sul"
+                ],
+                [
+                  "MG",
+                  "MG · Minas Gerais"
+                ],
+                [
+                  "PA",
+                  "PA · Pará"
+                ],
+                [
+                  "PB",
+                  "PB · Paraíba"
+                ],
+                [
+                  "PR",
+                  "PR · Paraná"
+                ],
+                [
+                  "PE",
+                  "PE · Pernambuco"
+                ],
+                [
+                  "PI",
+                  "PI · Piauí"
+                ],
+                [
+                  "RJ",
+                  "RJ · Rio de Janeiro"
+                ],
+                [
+                  "RN",
+                  "RN · Rio Grande do Norte"
+                ],
+                [
+                  "RS",
+                  "RS · Rio Grande do Sul"
+                ],
+                [
+                  "RO",
+                  "RO · Rondônia"
+                ],
+                [
+                  "RR",
+                  "RR · Roraima"
+                ],
+                [
+                  "SC",
+                  "SC · Santa Catarina"
+                ],
+                [
+                  "SP",
+                  "SP · São Paulo"
+                ],
+                [
+                  "SE",
+                  "SE · Sergipe"
+                ],
+                [
+                  "TO",
+                  "TO · Tocantins"
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "id": "address.country",
+          "label": "País",
+          "method": "country",
+          "providerParameters": [],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": [
+            {
+              "name": "state",
+              "label": "UF do perfil",
+              "type": "select",
+              "default": "any",
+              "options": [
+                [
+                  "any",
+                  "Aleatória"
+                ],
+                [
+                  "AC",
+                  "AC · Acre"
+                ],
+                [
+                  "AL",
+                  "AL · Alagoas"
+                ],
+                [
+                  "AP",
+                  "AP · Amapá"
+                ],
+                [
+                  "AM",
+                  "AM · Amazonas"
+                ],
+                [
+                  "BA",
+                  "BA · Bahia"
+                ],
+                [
+                  "CE",
+                  "CE · Ceará"
+                ],
+                [
+                  "DF",
+                  "DF · Distrito Federal"
+                ],
+                [
+                  "ES",
+                  "ES · Espírito Santo"
+                ],
+                [
+                  "GO",
+                  "GO · Goiás"
+                ],
+                [
+                  "MA",
+                  "MA · Maranhão"
+                ],
+                [
+                  "MT",
+                  "MT · Mato Grosso"
+                ],
+                [
+                  "MS",
+                  "MS · Mato Grosso do Sul"
+                ],
+                [
+                  "MG",
+                  "MG · Minas Gerais"
+                ],
+                [
+                  "PA",
+                  "PA · Pará"
+                ],
+                [
+                  "PB",
+                  "PB · Paraíba"
+                ],
+                [
+                  "PR",
+                  "PR · Paraná"
+                ],
+                [
+                  "PE",
+                  "PE · Pernambuco"
+                ],
+                [
+                  "PI",
+                  "PI · Piauí"
+                ],
+                [
+                  "RJ",
+                  "RJ · Rio de Janeiro"
+                ],
+                [
+                  "RN",
+                  "RN · Rio Grande do Norte"
+                ],
+                [
+                  "RS",
+                  "RS · Rio Grande do Sul"
+                ],
+                [
+                  "RO",
+                  "RO · Rondônia"
+                ],
+                [
+                  "RR",
+                  "RR · Roraima"
+                ],
+                [
+                  "SC",
+                  "SC · Santa Catarina"
+                ],
+                [
+                  "SP",
+                  "SP · São Paulo"
+                ],
+                [
+                  "SE",
+                  "SE · Sergipe"
+                ],
+                [
+                  "TO",
+                  "TO · Tocantins"
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "id": "address.country_code",
+          "label": "Código do país",
+          "method": "country_code",
+          "providerParameters": [
+            {
+              "name": "representation",
+              "required": false,
+              "default": "alpha-2",
+              "annotation": "<class 'str'>"
+            }
+          ],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": [
+            {
+              "name": "state",
+              "label": "UF do perfil",
+              "type": "select",
+              "default": "any",
+              "options": [
+                [
+                  "any",
+                  "Aleatória"
+                ],
+                [
+                  "AC",
+                  "AC · Acre"
+                ],
+                [
+                  "AL",
+                  "AL · Alagoas"
+                ],
+                [
+                  "AP",
+                  "AP · Amapá"
+                ],
+                [
+                  "AM",
+                  "AM · Amazonas"
+                ],
+                [
+                  "BA",
+                  "BA · Bahia"
+                ],
+                [
+                  "CE",
+                  "CE · Ceará"
+                ],
+                [
+                  "DF",
+                  "DF · Distrito Federal"
+                ],
+                [
+                  "ES",
+                  "ES · Espírito Santo"
+                ],
+                [
+                  "GO",
+                  "GO · Goiás"
+                ],
+                [
+                  "MA",
+                  "MA · Maranhão"
+                ],
+                [
+                  "MT",
+                  "MT · Mato Grosso"
+                ],
+                [
+                  "MS",
+                  "MS · Mato Grosso do Sul"
+                ],
+                [
+                  "MG",
+                  "MG · Minas Gerais"
+                ],
+                [
+                  "PA",
+                  "PA · Pará"
+                ],
+                [
+                  "PB",
+                  "PB · Paraíba"
+                ],
+                [
+                  "PR",
+                  "PR · Paraná"
+                ],
+                [
+                  "PE",
+                  "PE · Pernambuco"
+                ],
+                [
+                  "PI",
+                  "PI · Piauí"
+                ],
+                [
+                  "RJ",
+                  "RJ · Rio de Janeiro"
+                ],
+                [
+                  "RN",
+                  "RN · Rio Grande do Norte"
+                ],
+                [
+                  "RS",
+                  "RS · Rio Grande do Sul"
+                ],
+                [
+                  "RO",
+                  "RO · Rondônia"
+                ],
+                [
+                  "RR",
+                  "RR · Roraima"
+                ],
+                [
+                  "SC",
+                  "SC · Santa Catarina"
+                ],
+                [
+                  "SP",
+                  "SP · São Paulo"
+                ],
+                [
+                  "SE",
+                  "SE · Sergipe"
+                ],
+                [
+                  "TO",
+                  "TO · Tocantins"
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "id": "address.current_country",
+          "label": "País atual",
+          "method": "current_country",
+          "providerParameters": [],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": [
+            {
+              "name": "state",
+              "label": "UF do perfil",
+              "type": "select",
+              "default": "any",
+              "options": [
+                [
+                  "any",
+                  "Aleatória"
+                ],
+                [
+                  "AC",
+                  "AC · Acre"
+                ],
+                [
+                  "AL",
+                  "AL · Alagoas"
+                ],
+                [
+                  "AP",
+                  "AP · Amapá"
+                ],
+                [
+                  "AM",
+                  "AM · Amazonas"
+                ],
+                [
+                  "BA",
+                  "BA · Bahia"
+                ],
+                [
+                  "CE",
+                  "CE · Ceará"
+                ],
+                [
+                  "DF",
+                  "DF · Distrito Federal"
+                ],
+                [
+                  "ES",
+                  "ES · Espírito Santo"
+                ],
+                [
+                  "GO",
+                  "GO · Goiás"
+                ],
+                [
+                  "MA",
+                  "MA · Maranhão"
+                ],
+                [
+                  "MT",
+                  "MT · Mato Grosso"
+                ],
+                [
+                  "MS",
+                  "MS · Mato Grosso do Sul"
+                ],
+                [
+                  "MG",
+                  "MG · Minas Gerais"
+                ],
+                [
+                  "PA",
+                  "PA · Pará"
+                ],
+                [
+                  "PB",
+                  "PB · Paraíba"
+                ],
+                [
+                  "PR",
+                  "PR · Paraná"
+                ],
+                [
+                  "PE",
+                  "PE · Pernambuco"
+                ],
+                [
+                  "PI",
+                  "PI · Piauí"
+                ],
+                [
+                  "RJ",
+                  "RJ · Rio de Janeiro"
+                ],
+                [
+                  "RN",
+                  "RN · Rio Grande do Norte"
+                ],
+                [
+                  "RS",
+                  "RS · Rio Grande do Sul"
+                ],
+                [
+                  "RO",
+                  "RO · Rondônia"
+                ],
+                [
+                  "RR",
+                  "RR · Roraima"
+                ],
+                [
+                  "SC",
+                  "SC · Santa Catarina"
+                ],
+                [
+                  "SP",
+                  "SP · São Paulo"
+                ],
+                [
+                  "SE",
+                  "SE · Sergipe"
+                ],
+                [
+                  "TO",
+                  "TO · Tocantins"
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "id": "address.current_country_code",
+          "label": "Código do país atual",
+          "method": "current_country_code",
+          "providerParameters": [],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": [
+            {
+              "name": "state",
+              "label": "UF do perfil",
+              "type": "select",
+              "default": "any",
+              "options": [
+                [
+                  "any",
+                  "Aleatória"
+                ],
+                [
+                  "AC",
+                  "AC · Acre"
+                ],
+                [
+                  "AL",
+                  "AL · Alagoas"
+                ],
+                [
+                  "AP",
+                  "AP · Amapá"
+                ],
+                [
+                  "AM",
+                  "AM · Amazonas"
+                ],
+                [
+                  "BA",
+                  "BA · Bahia"
+                ],
+                [
+                  "CE",
+                  "CE · Ceará"
+                ],
+                [
+                  "DF",
+                  "DF · Distrito Federal"
+                ],
+                [
+                  "ES",
+                  "ES · Espírito Santo"
+                ],
+                [
+                  "GO",
+                  "GO · Goiás"
+                ],
+                [
+                  "MA",
+                  "MA · Maranhão"
+                ],
+                [
+                  "MT",
+                  "MT · Mato Grosso"
+                ],
+                [
+                  "MS",
+                  "MS · Mato Grosso do Sul"
+                ],
+                [
+                  "MG",
+                  "MG · Minas Gerais"
+                ],
+                [
+                  "PA",
+                  "PA · Pará"
+                ],
+                [
+                  "PB",
+                  "PB · Paraíba"
+                ],
+                [
+                  "PR",
+                  "PR · Paraná"
+                ],
+                [
+                  "PE",
+                  "PE · Pernambuco"
+                ],
+                [
+                  "PI",
+                  "PI · Piauí"
+                ],
+                [
+                  "RJ",
+                  "RJ · Rio de Janeiro"
+                ],
+                [
+                  "RN",
+                  "RN · Rio Grande do Norte"
+                ],
+                [
+                  "RS",
+                  "RS · Rio Grande do Sul"
+                ],
+                [
+                  "RO",
+                  "RO · Rondônia"
+                ],
+                [
+                  "RR",
+                  "RR · Roraima"
+                ],
+                [
+                  "SC",
+                  "SC · Santa Catarina"
+                ],
+                [
+                  "SP",
+                  "SP · São Paulo"
+                ],
+                [
+                  "SE",
+                  "SE · Sergipe"
+                ],
+                [
+                  "TO",
+                  "TO · Tocantins"
+                ]
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "phone_number",
+      "label": "Telefone fictício",
+      "items": [
+        {
+          "id": "phone_number.phone_number",
+          "label": "Telefone",
+          "method": "phone_number",
+          "providerParameters": [],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": []
+        },
+        {
+          "id": "phone_number.cellphone_number",
+          "label": "Celular",
+          "method": "cellphone_number",
+          "providerParameters": [],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": []
+        }
+      ]
+    },
+    {
+      "id": "automotive",
+      "label": "Veículo fictício",
+      "items": [
+        {
+          "id": "automotive.license_plate",
+          "label": "Placa",
+          "method": "license_plate",
+          "providerParameters": [],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": []
+        },
+        {
+          "id": "automotive.vin",
+          "label": "VIN",
+          "method": "vin",
+          "providerParameters": [],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": []
+        }
+      ]
+    },
+    {
+      "id": "bank",
+      "label": "Dados bancários",
+      "items": [
+        {
+          "id": "bank.bank",
+          "label": "Banco",
+          "method": "bank",
+          "providerParameters": [],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": []
+        },
+        {
+          "id": "bank.bank_country",
+          "label": "País do banco",
+          "method": "bank_country",
+          "providerParameters": [],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": []
+        },
+        {
+          "id": "bank.bban",
+          "label": "BBAN",
+          "method": "bban",
+          "providerParameters": [],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": []
+        },
+        {
+          "id": "bank.iban",
+          "label": "IBAN",
+          "method": "iban",
+          "providerParameters": [],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": []
+        },
+        {
+          "id": "bank.swift",
+          "label": "Código SWIFT",
+          "method": "swift",
+          "providerParameters": [
+            {
+              "name": "length",
+              "required": false,
+              "default": null,
+              "annotation": "int | None"
+            },
+            {
+              "name": "primary",
+              "required": false,
+              "default": false,
+              "annotation": "<class 'bool'>"
+            },
+            {
+              "name": "use_dataset",
+              "required": false,
+              "default": false,
+              "annotation": "<class 'bool'>"
+            }
+          ],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": []
+        },
+        {
+          "id": "bank.aba",
+          "label": "Código bancário ABA",
+          "method": "aba",
+          "providerParameters": [],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": []
+        }
+      ]
+    },
+    {
+      "id": "credit_card",
+      "label": "Cartão de crédito fictício",
+      "items": [
+        {
+          "id": "credit_card.credit_card_number",
+          "label": "Número do cartão",
+          "method": "credit_card_number",
+          "providerParameters": [
+            {
+              "name": "card_type",
+              "required": false,
+              "default": null,
+              "annotation": "~CardType | None"
+            }
+          ],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": []
+        },
+        {
+          "id": "credit_card.credit_card_provider",
+          "label": "Bandeira do cartão",
+          "method": "credit_card_provider",
+          "providerParameters": [
+            {
+              "name": "card_type",
+              "required": false,
+              "default": null,
+              "annotation": "~CardType | None"
+            }
+          ],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": []
+        },
+        {
+          "id": "credit_card.credit_card_expire",
+          "label": "Validade do cartão",
+          "method": "credit_card_expire",
+          "providerParameters": [
+            {
+              "name": "start",
+              "required": false,
+              "default": "now",
+              "annotation": "datetime.date | datetime.datetime | datetime.timedelta | str | int"
+            },
+            {
+              "name": "end",
+              "required": false,
+              "default": "+10y",
+              "annotation": "datetime.date | datetime.datetime | datetime.timedelta | str | int"
+            },
+            {
+              "name": "date_format",
+              "required": false,
+              "default": "%m/%y",
+              "annotation": "<class 'str'>"
+            }
+          ],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": []
+        },
+        {
+          "id": "credit_card.credit_card_security_code",
+          "label": "Código de segurança",
+          "method": "credit_card_security_code",
+          "providerParameters": [
+            {
+              "name": "card_type",
+              "required": false,
+              "default": null,
+              "annotation": "~CardType | None"
+            }
+          ],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": []
+        },
+        {
+          "id": "credit_card.credit_card_full",
+          "label": "Cartão completo",
+          "method": "credit_card_full",
+          "providerParameters": [
+            {
+              "name": "card_type",
+              "required": false,
+              "default": null,
+              "annotation": "~CardType | None"
+            }
+          ],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": []
+        }
+      ]
+    },
+    {
+      "id": "color",
+      "label": "Cor",
+      "items": [
+        {
+          "id": "color.color_name",
+          "label": "Nome da cor",
+          "method": "color_name",
+          "providerParameters": [],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": []
+        }
+      ]
+    },
+    {
+      "id": "barcode",
+      "label": "Código de barras",
+      "items": [
+        {
+          "id": "barcode.ean",
+          "label": "EAN",
+          "method": "ean",
+          "providerParameters": [
+            {
+              "name": "length",
+              "required": false,
+              "default": 13,
+              "annotation": "<class 'int'>"
+            },
+            {
+              "name": "prefixes",
+              "required": false,
+              "default": [],
+              "annotation": "typing.Tuple[int | str | typing.Tuple[int | str, ...], ...]"
+            }
+          ],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": []
+        },
+        {
+          "id": "barcode.ean8",
+          "label": "EAN-8",
+          "method": "ean8",
+          "providerParameters": [
+            {
+              "name": "prefixes",
+              "required": false,
+              "default": [],
+              "annotation": "typing.Tuple[int | str | typing.Tuple[int | str, ...], ...]"
+            }
+          ],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": []
+        },
+        {
+          "id": "barcode.ean13",
+          "label": "EAN-13",
+          "method": "ean13",
+          "providerParameters": [
+            {
+              "name": "prefixes",
+              "required": false,
+              "default": [],
+              "annotation": "typing.Tuple[int | str | typing.Tuple[int | str, ...], ...]"
+            },
+            {
+              "name": "leading_zero",
+              "required": false,
+              "default": null,
+              "annotation": "bool | None"
+            }
+          ],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": []
+        },
+        {
+          "id": "barcode.upc_a",
+          "label": "UPC-A",
+          "method": "upc_a",
+          "providerParameters": [
+            {
+              "name": "upc_ae_mode",
+              "required": false,
+              "default": false,
+              "annotation": "<class 'bool'>"
+            },
+            {
+              "name": "base",
+              "required": false,
+              "default": null,
+              "annotation": "str | None"
+            },
+            {
+              "name": "number_system_digit",
+              "required": false,
+              "default": null,
+              "annotation": "int | None"
+            }
+          ],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": []
+        },
+        {
+          "id": "barcode.upc_e",
+          "label": "UPC-E",
+          "method": "upc_e",
+          "providerParameters": [
+            {
+              "name": "base",
+              "required": false,
+              "default": null,
+              "annotation": "str | None"
+            },
+            {
+              "name": "number_system_digit",
+              "required": false,
+              "default": null,
+              "annotation": "int | None"
+            },
+            {
+              "name": "safe_mode",
+              "required": false,
+              "default": true,
+              "annotation": "<class 'bool'>"
+            }
+          ],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": []
+        }
+      ]
+    },
+    {
+      "id": "internet",
+      "label": "Dados de internet",
+      "items": [
+        {
+          "id": "internet.email",
+          "label": "E-mail",
+          "method": "email",
+          "providerParameters": [
+            {
+              "name": "safe",
+              "required": false,
+              "default": true,
+              "annotation": "<class 'bool'>"
+            },
+            {
+              "name": "domain",
+              "required": false,
+              "default": null,
+              "annotation": "str | None"
+            }
+          ],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": []
+        },
+        {
+          "id": "internet.company_email",
+          "label": "E-mail corporativo",
+          "method": "company_email",
+          "providerParameters": [],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": []
+        },
+        {
+          "id": "internet.user_name",
+          "label": "Nome de usuário",
+          "method": "user_name",
+          "providerParameters": [],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": []
+        },
+        {
+          "id": "internet.domain_name",
+          "label": "Domínio",
+          "method": "domain_name",
+          "providerParameters": [
+            {
+              "name": "levels",
+              "required": false,
+              "default": 1,
+              "annotation": "<class 'int'>"
+            }
+          ],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": []
+        },
+        {
+          "id": "internet.ipv4",
+          "label": "IPv4",
+          "method": "ipv4",
+          "providerParameters": [
+            {
+              "name": "network",
+              "required": false,
+              "default": false,
+              "annotation": "<class 'bool'>"
+            },
+            {
+              "name": "address_class",
+              "required": false,
+              "default": null,
+              "annotation": "str | None"
+            },
+            {
+              "name": "private",
+              "required": false,
+              "default": null,
+              "annotation": "str | None"
+            }
+          ],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": []
+        },
+        {
+          "id": "internet.ipv4_private",
+          "label": "IPv4 privado",
+          "method": "ipv4_private",
+          "providerParameters": [
+            {
+              "name": "network",
+              "required": false,
+              "default": false,
+              "annotation": "<class 'bool'>"
+            },
+            {
+              "name": "address_class",
+              "required": false,
+              "default": null,
+              "annotation": "str | None"
+            }
+          ],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": []
+        },
+        {
+          "id": "internet.ipv4_public",
+          "label": "IPv4 público",
+          "method": "ipv4_public",
+          "providerParameters": [
+            {
+              "name": "network",
+              "required": false,
+              "default": false,
+              "annotation": "<class 'bool'>"
+            },
+            {
+              "name": "address_class",
+              "required": false,
+              "default": null,
+              "annotation": "str | None"
+            }
+          ],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": []
+        },
+        {
+          "id": "internet.ipv6",
+          "label": "IPv6",
+          "method": "ipv6",
+          "providerParameters": [
+            {
+              "name": "network",
+              "required": false,
+              "default": false,
+              "annotation": "<class 'bool'>"
+            }
+          ],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": []
+        },
+        {
+          "id": "internet.mac_address",
+          "label": "Endereço MAC",
+          "method": "mac_address",
+          "providerParameters": [
+            {
+              "name": "multicast",
+              "required": false,
+              "default": false,
+              "annotation": "<class 'bool'>"
+            }
+          ],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": []
+        },
+        {
+          "id": "internet.image_url",
+          "label": "URL de imagem",
+          "method": "image_url",
+          "providerParameters": [
+            {
+              "name": "width",
+              "required": false,
+              "default": null,
+              "annotation": "int | None"
+            },
+            {
+              "name": "height",
+              "required": false,
+              "default": null,
+              "annotation": "int | None"
+            },
+            {
+              "name": "placeholder_url",
+              "required": false,
+              "default": null,
+              "annotation": "str | None"
+            }
+          ],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": []
+        },
+        {
+          "id": "internet.dga",
+          "label": "Domínio gerado por algoritmo",
+          "method": "dga",
+          "providerParameters": [
+            {
+              "name": "year",
+              "required": false,
+              "default": null,
+              "annotation": "int | None"
+            },
+            {
+              "name": "month",
+              "required": false,
+              "default": null,
+              "annotation": "int | None"
+            },
+            {
+              "name": "day",
+              "required": false,
+              "default": null,
+              "annotation": "int | None"
+            },
+            {
+              "name": "tld",
+              "required": false,
+              "default": null,
+              "annotation": "str | None"
+            },
+            {
+              "name": "length",
+              "required": false,
+              "default": null,
+              "annotation": "int | None"
+            }
+          ],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": []
+        }
+      ]
+    },
+    {
+      "id": "geo",
+      "label": "Coordenada geográfica",
+      "items": [
+        {
+          "id": "geo.latitude",
+          "label": "Latitude",
+          "method": "latitude",
+          "providerParameters": [],
+          "returnAnnotation": "<class 'decimal.Decimal'>",
+          "parameters": []
+        },
+        {
+          "id": "geo.longitude",
+          "label": "Longitude",
+          "method": "longitude",
+          "providerParameters": [],
+          "returnAnnotation": "<class 'decimal.Decimal'>",
+          "parameters": []
+        },
+        {
+          "id": "geo.coordinate",
+          "label": "Coordenada",
+          "method": "coordinate",
+          "providerParameters": [
+            {
+              "name": "center",
+              "required": false,
+              "default": null,
+              "annotation": "float | None"
+            },
+            {
+              "name": "radius",
+              "required": false,
+              "default": 0.001,
+              "annotation": "float | int"
+            }
+          ],
+          "returnAnnotation": "<class 'decimal.Decimal'>",
+          "parameters": []
+        }
+      ]
+    },
+    {
+      "id": "job",
+      "label": "Profissão fictícia",
+      "items": [
+        {
+          "id": "job.job",
+          "label": "Profissão",
+          "method": "job",
+          "providerParameters": [],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": []
+        }
+      ]
+    },
+    {
+      "id": "lorem",
+      "label": "Texto fictício",
+      "items": [
+        {
+          "id": "lorem.sentence",
+          "label": "Frase",
+          "method": "sentence",
+          "providerParameters": [
+            {
+              "name": "nb_words",
+              "required": false,
+              "default": 6,
+              "annotation": "<class 'int'>"
+            },
+            {
+              "name": "variable_nb_words",
+              "required": false,
+              "default": true,
+              "annotation": "<class 'bool'>"
+            },
+            {
+              "name": "ext_word_list",
+              "required": false,
+              "default": null,
+              "annotation": "typing.Sequence[str] | None"
+            }
+          ],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": []
+        }
+      ]
+    },
+    {
+      "id": "passport",
+      "label": "Passaporte fictício",
+      "items": [
+        {
+          "id": "passport.passport_number",
+          "label": "Número do passaporte",
+          "method": "passport_number",
+          "providerParameters": [],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": []
+        },
+        {
+          "id": "passport.passport_owner",
+          "label": "Titular do passaporte",
+          "method": "passport_owner",
+          "providerParameters": [
+            {
+              "name": "gender",
+              "required": false,
+              "default": "X",
+              "annotation": "typing.Literal['M', 'F', 'X']"
+            }
+          ],
+          "returnAnnotation": "typing.Tuple[str, str]",
+          "parameters": []
+        },
+        {
+          "id": "passport.passport_gender",
+          "label": "Gênero do titular",
+          "method": "passport_gender",
+          "providerParameters": [
+            {
+              "name": "seed",
+              "required": false,
+              "default": 0,
+              "annotation": "<class 'int'>"
+            }
+          ],
+          "returnAnnotation": "typing.Literal['M', 'F', 'X']",
+          "parameters": []
+        },
+        {
+          "id": "passport.passport_dob",
+          "label": "Nascimento do titular",
+          "method": "passport_dob",
+          "providerParameters": [],
+          "returnAnnotation": "<class 'datetime.date'>",
+          "parameters": []
+        },
+        {
+          "id": "passport.passport_dates",
+          "label": "Datas do passaporte",
+          "method": "passport_dates",
+          "providerParameters": [
+            {
+              "name": "birthday",
+              "required": false,
+              "default": "2026-10-31",
+              "annotation": "<class 'datetime.date'>"
+            }
+          ],
+          "returnAnnotation": "typing.Tuple[str, str, str]",
+          "parameters": []
+        }
+      ]
+    },
+    {
+      "id": "ssn",
+      "label": "Identificador nacional fictício",
+      "items": [
+        {
+          "id": "ssn.ssn",
+          "label": "Identificador nacional",
+          "method": "ssn",
+          "providerParameters": [],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": []
+        },
+        {
+          "id": "ssn.rg",
+          "label": "Registro geral",
+          "method": "rg",
+          "providerParameters": [],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": []
+        },
+        {
+          "id": "ssn.cin",
+          "label": "Carteira de identidade nacional",
+          "method": "cin",
+          "providerParameters": [],
+          "returnAnnotation": "<class 'str'>",
+          "parameters": []
+        }
+      ]
+    }
+  ],
+  "legacyItems": [
+    {
+      "id": "person.prefix",
+      "category": "person",
+      "categoryLabel": "Pessoa fictícia",
+      "label": "Tratamento",
+      "parameters": []
+    },
+    {
+      "id": "person.suffix",
+      "category": "person",
+      "categoryLabel": "Pessoa fictícia",
+      "label": "Sufixo",
+      "parameters": []
+    },
+    {
+      "id": "person.name_female",
+      "category": "person",
+      "categoryLabel": "Pessoa fictícia",
+      "label": "Nome feminino",
+      "parameters": []
+    },
+    {
+      "id": "person.name_male",
+      "category": "person",
+      "categoryLabel": "Pessoa fictícia",
+      "label": "Nome masculino",
+      "parameters": []
+    },
+    {
+      "id": "person.first_name_female",
+      "category": "person",
+      "categoryLabel": "Pessoa fictícia",
+      "label": "Primeiro nome feminino",
+      "parameters": []
+    },
+    {
+      "id": "person.first_name_male",
+      "category": "person",
+      "categoryLabel": "Pessoa fictícia",
+      "label": "Primeiro nome masculino",
+      "parameters": []
+    },
+    {
+      "id": "person.last_name_female",
+      "category": "person",
+      "categoryLabel": "Pessoa fictícia",
+      "label": "Sobrenome feminino",
+      "parameters": []
+    },
+    {
+      "id": "person.last_name_male",
+      "category": "person",
+      "categoryLabel": "Pessoa fictícia",
+      "label": "Sobrenome masculino",
+      "parameters": []
+    },
+    {
+      "id": "person.name_nonbinary",
+      "category": "person",
+      "categoryLabel": "Pessoa fictícia",
+      "label": "Nome não binário",
+      "parameters": []
+    },
+    {
+      "id": "person.first_name_nonbinary",
+      "category": "person",
+      "categoryLabel": "Pessoa fictícia",
+      "label": "Primeiro nome não binário",
+      "parameters": []
+    },
+    {
+      "id": "person.last_name_nonbinary",
+      "category": "person",
+      "categoryLabel": "Pessoa fictícia",
+      "label": "Sobrenome não binário",
+      "parameters": []
+    },
+    {
+      "id": "person.prefix_female",
+      "category": "person",
+      "categoryLabel": "Pessoa fictícia",
+      "label": "Tratamento feminino",
+      "parameters": []
+    },
+    {
+      "id": "person.prefix_male",
+      "category": "person",
+      "categoryLabel": "Pessoa fictícia",
+      "label": "Tratamento masculino",
+      "parameters": []
+    },
+    {
+      "id": "person.prefix_nonbinary",
+      "category": "person",
+      "categoryLabel": "Pessoa fictícia",
+      "label": "Tratamento não binário",
+      "parameters": []
+    },
+    {
+      "id": "person.suffix_female",
+      "category": "person",
+      "categoryLabel": "Pessoa fictícia",
+      "label": "Sufixo feminino",
+      "parameters": []
+    },
+    {
+      "id": "person.suffix_male",
+      "category": "person",
+      "categoryLabel": "Pessoa fictícia",
+      "label": "Sufixo masculino",
+      "parameters": []
+    },
+    {
+      "id": "person.suffix_nonbinary",
+      "category": "person",
+      "categoryLabel": "Pessoa fictícia",
+      "label": "Sufixo não binário",
+      "parameters": []
+    },
+    {
+      "id": "person.language_name",
+      "category": "person",
+      "categoryLabel": "Pessoa fictícia",
+      "label": "Idioma",
+      "parameters": []
+    },
+    {
+      "id": "company.company_suffix",
+      "category": "company",
+      "categoryLabel": "Empresa fictícia",
+      "label": "Sufixo empresarial",
+      "parameters": []
+    },
+    {
+      "id": "company.catch_phrase",
+      "category": "company",
+      "categoryLabel": "Empresa fictícia",
+      "label": "Frase de efeito",
+      "parameters": []
+    },
+    {
+      "id": "company.catch_phrase_verb",
+      "category": "company",
+      "categoryLabel": "Empresa fictícia",
+      "label": "Verbo da frase de efeito",
+      "parameters": []
+    },
+    {
+      "id": "company.catch_phrase_noun",
+      "category": "company",
+      "categoryLabel": "Empresa fictícia",
+      "label": "Substantivo da frase de efeito",
+      "parameters": []
+    },
+    {
+      "id": "company.catch_phrase_attribute",
+      "category": "company",
+      "categoryLabel": "Empresa fictícia",
+      "label": "Atributo da frase de efeito",
+      "parameters": []
+    },
+    {
+      "id": "company.bs",
+      "category": "company",
+      "categoryLabel": "Empresa fictícia",
+      "label": "Descrição de negócio",
+      "parameters": []
+    },
+    {
+      "id": "phone_number.service_phone_number",
+      "category": "phone_number",
+      "categoryLabel": "Telefone fictício",
+      "label": "Telefone de serviço",
+      "parameters": []
+    },
+    {
+      "id": "phone_number.msisdn",
+      "category": "phone_number",
+      "categoryLabel": "Telefone fictício",
+      "label": "Número MSISDN",
+      "parameters": []
+    },
+    {
+      "id": "phone_number.country_calling_code",
+      "category": "phone_number",
+      "categoryLabel": "Telefone fictício",
+      "label": "Código telefônico do país",
+      "parameters": []
+    },
+    {
+      "id": "bank.swift8",
+      "category": "bank",
+      "categoryLabel": "Dados bancários",
+      "label": "SWIFT de 8 caracteres",
+      "parameters": []
+    },
+    {
+      "id": "bank.swift11",
+      "category": "bank",
+      "categoryLabel": "Dados bancários",
+      "label": "SWIFT de 11 caracteres",
+      "parameters": []
+    },
+    {
+      "id": "currency.currency",
+      "category": "currency",
+      "categoryLabel": "Moeda",
+      "label": "Moeda",
+      "parameters": []
+    },
+    {
+      "id": "currency.currency_code",
+      "category": "currency",
+      "categoryLabel": "Moeda",
+      "label": "Código da moeda",
+      "parameters": []
+    },
+    {
+      "id": "currency.currency_name",
+      "category": "currency",
+      "categoryLabel": "Moeda",
+      "label": "Nome da moeda",
+      "parameters": []
+    },
+    {
+      "id": "currency.currency_symbol",
+      "category": "currency",
+      "categoryLabel": "Moeda",
+      "label": "Símbolo da moeda",
+      "parameters": []
+    },
+    {
+      "id": "currency.pricetag",
+      "category": "currency",
+      "categoryLabel": "Moeda",
+      "label": "Etiqueta de preço",
+      "parameters": []
+    },
+    {
+      "id": "currency.cryptocurrency",
+      "category": "currency",
+      "categoryLabel": "Moeda",
+      "label": "Criptomoeda",
+      "parameters": []
+    },
+    {
+      "id": "currency.cryptocurrency_code",
+      "category": "currency",
+      "categoryLabel": "Moeda",
+      "label": "Código da criptomoeda",
+      "parameters": []
+    },
+    {
+      "id": "currency.cryptocurrency_name",
+      "category": "currency",
+      "categoryLabel": "Moeda",
+      "label": "Nome da criptomoeda",
+      "parameters": []
+    },
+    {
+      "id": "color.color",
+      "category": "color",
+      "categoryLabel": "Cor",
+      "label": "Cor",
+      "parameters": []
+    },
+    {
+      "id": "color.hex_color",
+      "category": "color",
+      "categoryLabel": "Cor",
+      "label": "Cor hexadecimal",
+      "parameters": []
+    },
+    {
+      "id": "color.rgb_color",
+      "category": "color",
+      "categoryLabel": "Cor",
+      "label": "Cor RGB",
+      "parameters": []
+    },
+    {
+      "id": "color.rgb_css_color",
+      "category": "color",
+      "categoryLabel": "Cor",
+      "label": "Cor CSS RGB",
+      "parameters": []
+    },
+    {
+      "id": "color.color_rgb",
+      "category": "color",
+      "categoryLabel": "Cor",
+      "label": "Cor RGB em componentes",
+      "parameters": []
+    },
+    {
+      "id": "color.color_rgb_float",
+      "category": "color",
+      "categoryLabel": "Cor",
+      "label": "Cor RGB decimal",
+      "parameters": []
+    },
+    {
+      "id": "color.color_hsl",
+      "category": "color",
+      "categoryLabel": "Cor",
+      "label": "Cor HSL",
+      "parameters": []
+    },
+    {
+      "id": "color.color_hsv",
+      "category": "color",
+      "categoryLabel": "Cor",
+      "label": "Cor HSV",
+      "parameters": []
+    },
+    {
+      "id": "color.safe_color_name",
+      "category": "color",
+      "categoryLabel": "Cor",
+      "label": "Nome de cor segura",
+      "parameters": []
+    },
+    {
+      "id": "color.safe_hex_color",
+      "category": "color",
+      "categoryLabel": "Cor",
+      "label": "Cor segura hexadecimal",
+      "parameters": []
+    },
+    {
+      "id": "barcode.localized_ean",
+      "category": "barcode",
+      "categoryLabel": "Código de barras",
+      "label": "EAN localizado",
+      "parameters": []
+    },
+    {
+      "id": "barcode.localized_ean8",
+      "category": "barcode",
+      "categoryLabel": "Código de barras",
+      "label": "EAN-8 localizado",
+      "parameters": []
+    },
+    {
+      "id": "barcode.localized_ean13",
+      "category": "barcode",
+      "categoryLabel": "Código de barras",
+      "label": "EAN-13 localizado",
+      "parameters": []
+    },
+    {
+      "id": "internet.safe_email",
+      "category": "internet",
+      "categoryLabel": "Dados de internet",
+      "label": "E-mail seguro",
+      "parameters": []
+    },
+    {
+      "id": "internet.free_email",
+      "category": "internet",
+      "categoryLabel": "Dados de internet",
+      "label": "E-mail gratuito",
+      "parameters": []
+    },
+    {
+      "id": "internet.ascii_email",
+      "category": "internet",
+      "categoryLabel": "Dados de internet",
+      "label": "E-mail ASCII",
+      "parameters": []
+    },
+    {
+      "id": "internet.ascii_safe_email",
+      "category": "internet",
+      "categoryLabel": "Dados de internet",
+      "label": "E-mail seguro ASCII",
+      "parameters": []
+    },
+    {
+      "id": "internet.ascii_free_email",
+      "category": "internet",
+      "categoryLabel": "Dados de internet",
+      "label": "E-mail gratuito ASCII",
+      "parameters": []
+    },
+    {
+      "id": "internet.ascii_company_email",
+      "category": "internet",
+      "categoryLabel": "Dados de internet",
+      "label": "E-mail corporativo ASCII",
+      "parameters": []
+    },
+    {
+      "id": "internet.domain_word",
+      "category": "internet",
+      "categoryLabel": "Dados de internet",
+      "label": "Palavra do domínio",
+      "parameters": []
+    },
+    {
+      "id": "internet.free_email_domain",
+      "category": "internet",
+      "categoryLabel": "Dados de internet",
+      "label": "Domínio gratuito",
+      "parameters": []
+    },
+    {
+      "id": "internet.safe_domain_name",
+      "category": "internet",
+      "categoryLabel": "Dados de internet",
+      "label": "Domínio seguro",
+      "parameters": []
+    },
+    {
+      "id": "internet.hostname",
+      "category": "internet",
+      "categoryLabel": "Dados de internet",
+      "label": "Nome de host",
+      "parameters": []
+    },
+    {
+      "id": "internet.url",
+      "category": "internet",
+      "categoryLabel": "Dados de internet",
+      "label": "URL",
+      "parameters": []
+    },
+    {
+      "id": "internet.uri",
+      "category": "internet",
+      "categoryLabel": "Dados de internet",
+      "label": "URI",
+      "parameters": []
+    },
+    {
+      "id": "internet.uri_page",
+      "category": "internet",
+      "categoryLabel": "Dados de internet",
+      "label": "Página da URI",
+      "parameters": []
+    },
+    {
+      "id": "internet.uri_path",
+      "category": "internet",
+      "categoryLabel": "Dados de internet",
+      "label": "Caminho da URI",
+      "parameters": []
+    },
+    {
+      "id": "internet.uri_extension",
+      "category": "internet",
+      "categoryLabel": "Dados de internet",
+      "label": "Extensão da URI",
+      "parameters": []
+    },
+    {
+      "id": "internet.slug",
+      "category": "internet",
+      "categoryLabel": "Dados de internet",
+      "label": "Slug",
+      "parameters": []
+    },
+    {
+      "id": "internet.tld",
+      "category": "internet",
+      "categoryLabel": "Dados de internet",
+      "label": "Domínio de topo",
+      "parameters": []
+    },
+    {
+      "id": "internet.ipv4_network_class",
+      "category": "internet",
+      "categoryLabel": "Dados de internet",
+      "label": "Classe de rede IPv4",
+      "parameters": []
+    },
+    {
+      "id": "internet.port_number",
+      "category": "internet",
+      "categoryLabel": "Dados de internet",
+      "label": "Porta de rede",
+      "parameters": []
+    },
+    {
+      "id": "internet.http_method",
+      "category": "internet",
+      "categoryLabel": "Dados de internet",
+      "label": "Método HTTP",
+      "parameters": []
+    },
+    {
+      "id": "internet.http_status_code",
+      "category": "internet",
+      "categoryLabel": "Dados de internet",
+      "label": "Status HTTP",
+      "parameters": []
+    },
+    {
+      "id": "internet.iana_id",
+      "category": "internet",
+      "categoryLabel": "Dados de internet",
+      "label": "ID IANA",
+      "parameters": []
+    },
+    {
+      "id": "internet.nic_handle",
+      "category": "internet",
+      "categoryLabel": "Dados de internet",
+      "label": "Identificador NIC",
+      "parameters": []
+    },
+    {
+      "id": "internet.nic_handles",
+      "category": "internet",
+      "categoryLabel": "Dados de internet",
+      "label": "Identificadores NIC",
+      "parameters": []
+    },
+    {
+      "id": "internet.ripe_id",
+      "category": "internet",
+      "categoryLabel": "Dados de internet",
+      "label": "ID RIPE",
+      "parameters": []
+    },
+    {
+      "id": "geo.latlng",
+      "category": "geo",
+      "categoryLabel": "Coordenada geográfica",
+      "label": "Latitude e longitude",
+      "parameters": []
+    },
+    {
+      "id": "geo.local_latlng",
+      "category": "geo",
+      "categoryLabel": "Coordenada geográfica",
+      "label": "Coordenada local",
+      "parameters": []
+    },
+    {
+      "id": "geo.location_on_land",
+      "category": "geo",
+      "categoryLabel": "Coordenada geográfica",
+      "label": "Localização em terra",
+      "parameters": []
+    },
+    {
+      "id": "job.job_female",
+      "category": "job",
+      "categoryLabel": "Profissão fictícia",
+      "label": "Profissão feminina",
+      "parameters": []
+    },
+    {
+      "id": "job.job_male",
+      "category": "job",
+      "categoryLabel": "Profissão fictícia",
+      "label": "Profissão masculina",
+      "parameters": []
+    },
+    {
+      "id": "lorem.word",
+      "category": "lorem",
+      "categoryLabel": "Texto fictício",
+      "label": "Palavra",
+      "parameters": []
+    },
+    {
+      "id": "lorem.words",
+      "category": "lorem",
+      "categoryLabel": "Texto fictício",
+      "label": "Palavras",
+      "parameters": [
+        {
+          "name": "nb",
+          "label": "Quantidade de palavras",
+          "type": "integer",
+          "min": 1,
+          "max": 100,
+          "default": 3
+        }
+      ]
+    },
+    {
+      "id": "lorem.sentences",
+      "category": "lorem",
+      "categoryLabel": "Texto fictício",
+      "label": "Frases",
+      "parameters": [
+        {
+          "name": "nb",
+          "label": "Quantidade de frases",
+          "type": "integer",
+          "min": 1,
+          "max": 50,
+          "default": 3
+        }
+      ]
+    },
+    {
+      "id": "lorem.paragraph",
+      "category": "lorem",
+      "categoryLabel": "Texto fictício",
+      "label": "Parágrafo",
+      "parameters": []
+    },
+    {
+      "id": "lorem.paragraphs",
+      "category": "lorem",
+      "categoryLabel": "Texto fictício",
+      "label": "Parágrafos",
+      "parameters": [
+        {
+          "name": "nb",
+          "label": "Quantidade de parágrafos",
+          "type": "integer",
+          "min": 1,
+          "max": 20,
+          "default": 3
+        }
+      ]
+    },
+    {
+      "id": "lorem.text",
+      "category": "lorem",
+      "categoryLabel": "Texto fictício",
+      "label": "Texto",
+      "parameters": [
+        {
+          "name": "max_nb_chars",
+          "label": "Máximo de caracteres",
+          "type": "integer",
+          "min": 5,
+          "max": 4096,
+          "default": 200
+        }
+      ]
+    },
+    {
+      "id": "lorem.texts",
+      "category": "lorem",
+      "categoryLabel": "Texto fictício",
+      "label": "Textos",
+      "parameters": [
+        {
+          "name": "nb_texts",
+          "label": "Quantidade de textos",
+          "type": "integer",
+          "min": 1,
+          "max": 20,
+          "default": 3
+        }
+      ]
+    },
+    {
+      "id": "passport.passport_full",
+      "category": "passport",
+      "categoryLabel": "Passaporte fictício",
+      "label": "Passaporte completo",
+      "parameters": []
+    }
+  ],
+  "internalExclusions": {
+    "company.cnpj": "CNPJ possui gerador próprio no MockAiZe.",
+    "ssn.cpf": "CPF possui gerador próprio no MockAiZe.",
+    "lorem.get_words_list": "Método auxiliar usado pelos métodos de texto; não é um gerador independente."
+  }
+}

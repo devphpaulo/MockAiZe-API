@@ -6,6 +6,8 @@ import json
 import os
 from pathlib import Path
 import socket
+import sqlite3
+import xml.etree.ElementTree as ET
 import subprocess
 import sys
 import tempfile
@@ -16,6 +18,7 @@ from fixtures.catalog_factory import create_catalog
 from mockaize_api.config import ApiConfig, save_config
 from mockaize_api.maintenance import configuration_fields
 from mockaize_api.security import create_credentials
+from mockaize_api.faker_catalog import manifest as faker_manifest
 from mockaize_api.windows_ops import WindowsDriver, discover_installation
 
 
@@ -42,6 +45,15 @@ def main():
         data.mkdir()
         source = root / 'source.sqlite3'
         create_catalog(source)
+        catalogue = faker_manifest()
+        faker_ids = [category['items'][0]['id'] for category in catalogue['categories']]
+        faker_ids.append(next(item['id'] for item in catalogue['legacyItems'] if item['category'] == 'currency'))
+        with sqlite3.connect(source) as db:
+            saved = json.loads(db.execute("SELECT config_json FROM variations WHERE id='file-1'").fetchone()[0])
+            field = json.dumps([{'ns': '', 'name': name, 'index': 1} for name in ('Document', 'Record', 'Value')])
+            saved['rulesByMode']['new'][field] = {'generator': {'type': 'compose', 'separator': '|', 'parts': [
+                {'type': 'faker', 'catalogVersion': 1, 'catalogId': item} for item in faker_ids]}}
+            db.execute("UPDATE variations SET config_json=? WHERE id='file-1'", (json.dumps(saved),))
         source_hash = hashlib.sha256(source.read_bytes()).hexdigest()
         config_path = data / 'config.json'
         with socket.socket() as listener:
@@ -90,6 +102,8 @@ def main():
                 for entry in manifest['files']:
                     content = (config.output_directory / entry['fileName']).read_bytes()
                     assert hashlib.sha256(content).hexdigest() == entry['sha256']
+                    assert all(node.text and len(node.text.split('|')) >= len(faker_ids)
+                               for node in ET.fromstring(content).findall('Record/Value'))
 
         def input_delete_grant(expected):
             import win32con

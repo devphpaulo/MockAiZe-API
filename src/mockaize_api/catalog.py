@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .errors import ApiError
 from .preset_repository import PresetRepository
+from .preset_codec import _encode, _validate_manual, PresetError
 
 
 _REQUIRED_COLUMNS = {
@@ -198,6 +199,11 @@ class Catalog:
             config = json.loads(row['config_json'])
             if not isinstance(config, dict):
                 raise _unavailable()
+            try:
+                _validate_manual(config)
+                _encode(config, configuration=True)
+            except (PresetError, ValueError, TypeError, RecursionError) as exc:
+                raise _unavailable() from exc
             _models(config)
             time_zone = 'America/Fortaleza'
             if connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='user_settings'").fetchone():

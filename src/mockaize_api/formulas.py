@@ -152,7 +152,9 @@ def evaluate(f,c,depth=0):
     if kind=='count':return str(c.get('count',1))
     if kind=='cpf':return cpf(f.get('mask'))
     if kind=='cnpj':return cnpj(f)
-    if kind in ('person','company','address'):return _profile(f,c)
+    if kind in ('faker','person','company','address'):
+        from .faker_adapter import resolve
+        return resolve(f,c)
     if kind=='date':return _date(f,c)
     if kind=='list':
         raw=f.get('values',''); values=[str(v).strip() for v in (raw if isinstance(raw,list) else str(raw).splitlines()) if str(v).strip()]

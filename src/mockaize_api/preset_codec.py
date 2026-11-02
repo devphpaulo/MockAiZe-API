@@ -12,8 +12,9 @@ ET.register_namespace('', NAMESPACE)
 ROOT_ATTRIBUTES = {'schemaVersion': '1', 'engineSpecVersion': '1', 'format': 'xml'}
 GENERATOR_TYPES = {'literal', 'copy', 'field', 'groupSum', 'config', 'count', 'cpf', 'cnpj',
                    'list', 'hash', 'person', 'company', 'address', 'zeros', 'sequence',
-                   'date', 'alpha', 'random', 'id', 'compose'}
+                   'date', 'alpha', 'random', 'id', 'compose', 'faker'}
 FORMULA_FIELDS = {
+    'faker': {'catalogVersion', 'category', 'catalogId', 'params', 'group'},
     'groupSum': {'source', 'group', 'path', 'allRecords'},
     'literal': {'value'}, 'copy': {'path'}, 'field': {'source', 'path'},
     'config': set(), 'count': set(), 'cpf': {'mask'},
@@ -104,6 +105,13 @@ def _validate(metadata, configuration, context):
         raise PresetError('Invalid preset time zone.') from exc
     if type(configuration) is not dict:
         raise PresetError('Preset configuration must be an object.')
+    _validate_manual(configuration)
+
+
+def _validate_manual(configuration):
+    manual = configuration.get('manual', {})
+    if isinstance(manual, dict) and 'fakerSeed' in manual and (not isinstance(manual['fakerSeed'], str) or not 1 <= len(manual['fakerSeed']) <= 128):
+        raise PresetError('Invalid manual Faker seed.')
 
 
 def _validate_path(value):
@@ -134,6 +142,9 @@ def _validate_formula(formula, depth=0):
     kind = formula['type']
     if set(formula) - ({'type'} | FORMULA_FIELDS[kind]):
         raise ValueError('Formula has unknown properties.')
+    if kind == 'faker':
+        from .faker_catalog import validate_formula
+        validate_formula(formula)
     if kind == 'date' and 'custom' in formula:
         custom = formula['custom']
         flags = {'day', 'month', 'year', 'hour', 'minute', 'second', 'milliseconds', 'timezone'}

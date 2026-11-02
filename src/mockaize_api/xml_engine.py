@@ -297,7 +297,7 @@ def _generate(config,mode,count,source_xml,input_group,template_xml,output_group
     doc=template.cloneNode(True);actual_group,wrapper=_replace_records(doc,output_group,count)
     def actual(path,index=0):return reindex(wrapper+parts(path),actual_group,index)
     context={'referenceDateTime':config.get('referenceDateTime') or datetime.now(timezone.utc).isoformat(),'timeZone':config.get('timeZone') or 'America/Fortaleza','baseDate':config.get('baseDate'),'configName':config.get('name','mock'),'fileIndex':file_index,'count':count}
-    jobs={};policies=[]
+    jobs={};policies=[]; first_profiles={}
     def evaluate_target(target):
         if not connected(doc,target):raise ValueError('Campo de saída ausente ou omitido.')
         if target not in jobs:return value(target)
@@ -315,7 +315,7 @@ def _generate(config,mode,count,source_xml,input_group,template_xml,output_group
     for index in range(count):
         source_index=index if mode=='return' else 0
         def make_context(index,source_index):
-            return {**context,'recordIndex':index,'profiles':{},'sourceValue':lambda p:value(resolve(source,reindex(p,input_group,source_index))),'outputValue':lambda p:evaluate_target(resolve(doc,actual(p,index))),'groupValues':lambda f:_group_values(source,reindex(f['group'],input_group,source_index),reindex(f['path'],input_group,source_index),input_group,f.get('allRecords',False)) if f.get('source')=='input' else _group_values(doc,actual(f['group'],index),actual(f['path'],index),actual_group,f.get('allRecords',False),evaluate_target)}
+            return {**context,'recordIndex':index,'profiles':first_profiles if index == 0 else {},'sourceValue':lambda p:value(resolve(source,reindex(p,input_group,source_index))),'outputValue':lambda p:evaluate_target(resolve(doc,actual(p,index))),'groupValues':lambda f:_group_values(source,reindex(f['group'],input_group,source_index),reindex(f['path'],input_group,source_index),input_group,f.get('allRecords',False)) if f.get('source')=='input' else _group_values(doc,actual(f['group'],index),actual(f['path'],index),actual_group,f.get('allRecords',False),evaluate_target)}
         ctx=make_context(index,source_index)
         refs=[(path,is_field,resolve(doc,actual(path,index))) for path,is_field in original_nodes if index==0 or has_prefix(path,parts(output_group))]
         for path,is_field,target in refs:
@@ -334,7 +334,7 @@ def _generate(config,mode,count,source_xml,input_group,template_xml,output_group
         if policy.get('requirement')=='required' and is_field and connected(doc,target) and not value(target).strip():raise ValueError('Campo obrigatório sem valor.')
     for path in headers:
         if len(records(doc,actual(path)))!=1:raise ValueError('Cabeçalho precisa permanecer único na saída.')
-    naming={**context,'recordIndex':0,'profiles':{},'sourceValue':lambda p:value(resolve(source,p)),'outputValue':lambda p:value(resolve(doc,actual(p))),'groupValues':lambda f:_group_values(source,f['group'],f['path'],input_group,f.get('allRecords',False)) if f.get('source')=='input' else _group_values(doc,actual(f['group']),actual(f['path']),actual_group,f.get('allRecords',False))}
+    naming={**context,'recordIndex':0,'profiles':first_profiles,'sourceValue':lambda p:value(resolve(source,p)),'outputValue':lambda p:value(resolve(doc,actual(p))),'groupValues':lambda f:_group_values(source,f['group'],f['path'],input_group,f.get('allRecords',False)) if f.get('source')=='input' else _group_values(doc,actual(f['group']),actual(f['path']),actual_group,f.get('allRecords',False))}
     return {'content':serialize(doc),'fileName':filename(evaluate(name_formula,naming)),'records':count},doc,actual_group
 
 

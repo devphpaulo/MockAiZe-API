@@ -7,7 +7,7 @@ import sys
 
 def collect(destination: Path, inno_license: Path | None = None) -> None:
     destination.mkdir(parents=True, exist_ok=True)
-    for package in ('pyinstaller', 'pywin32', 'tzdata'):
+    for package in ('pyinstaller', 'pywin32', 'tzdata', 'Faker'):
         dist = distribution(package)
         target = destination / package
         target.mkdir(exist_ok=True)
@@ -29,6 +29,7 @@ def collect(destination: Path, inno_license: Path | None = None) -> None:
     notices = Path(__file__).resolve().parent.parent / 'THIRD_PARTY_NOTICES.md'
     if notices.is_file():
         shutil.copy2(notices, destination / notices.name)
+    shutil.copy2(notices.parent / 'src/mockaize_api/FAKER_CATALOG_LICENSE.txt', destination / 'MockAiZe-Site-LICENSE.txt')
     swagger_source = notices.parent / 'src/mockaize_api/assets/swagger'
     swagger_target = destination / 'swagger-ui'
     swagger_target.mkdir(exist_ok=True)
